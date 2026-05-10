@@ -51,114 +51,6 @@ except st.errors.StreamlitAPIException:
 ui_style.inject()
 store.init_db()
 
-# ---- Chunked refresh state machine ----
-# A monolithic poller blocks Streamlit Cloud's WebSocket for 30-45s and the page
-# goes blank. We instead run each phase in its own short rerun cycle so the
-# socket stays alive and the user sees live progress.
-
-def _run_refresh_phase(idx: int) -> tuple[str, dict]:
-    """Run phase `idx`, return (label, result_dict)."""
-    from dk.config import equity_symbols, crypto_ids
-    from dk.sources import (prices_yfinance, news_rss, news_newsapi, earnings_finnhub,
-                             crypto_coingecko, macro_calendar, macro_context,
-                             tradingview_ratings, ipos_finnhub,
-                             trending_reddit, trending_stocktwits)
-    from dk.sentiment import scorer as sentiment_scorer
-    from dk.opportunity import delta as opp_delta
-    from dk.discovery import scanner as discovery
-    from dk.themes import registry as themes_reg
-    from dk.brokers import sync as broker_sync
-    from dk.jobs import alerts as alert_engine, custom_alerts as ca
-    from dk.notify import discord as discord_notifier
-    syms = equity_symbols()
-
-    if idx == 0:
-        rows = sum(prices_yfinance.fetch_prices(s) for s in syms)
-        return ":chart_with_upwards_trend: Prices", {"price_rows": rows}
-    if idx == 1:
-        rows = sum(prices_yfinance.fetch_earnings(s) for s in syms)
-        n2 = earnings_finnhub.fetch_calendar(days_ahead=30)
-        return ":calendar: Earnings + IPO calendar", {"earnings_yf": rows, "earnings_finnhub": n2,
-                                                       "ipos": ipos_finnhub.fetch_all()}
-    if idx == 2:
-        n_global = news_rss.fetch_global()
-        n_per = news_rss.fetch_per_ticker(syms)
-        return ":newspaper: News (RSS feeds)", {"news_global": n_global, "news_per_ticker": n_per}
-    if idx == 3:
-        from dk.config import load_watchlist
-        wl = load_watchlist()
-        names = {e["symbol"]: e.get("name", e["symbol"])
-                 for e in (wl.get("equities") or []) + (wl.get("etfs") or [])}
-        n = sum(news_newsapi.fetch_for_symbol(s, names.get(s)) for s in syms)
-        return ":satellite: NewsAPI (if key set)", {"news_newsapi": n}
-    if idx == 4:
-        c = crypto_coingecko.fetch_prices(crypto_ids())
-        m = macro_context.fetch_all()
-        mc = macro_calendar.load()
-        return ":coin: Crypto + macro context", {"crypto": c, "macro_context": m,
-                                                  "macro_events": mc}
-    if idx == 5:
-        n = tradingview_ratings.fetch_for_watchlist(intervals=["1d"])
-        return ":robot_face: TradingView ratings", {"tv_ratings": n}
-    if idx == 6:
-        d = discovery.scan(min_mentions=3, max_validate=20)
-        r = trending_reddit.fetch()
-        s = trending_stocktwits.fetch()
-        return ":telescope: Discovery + trending", {"discovery": d, "reddit": r, "stocktwits": s}
-    if idx == 7:
-        ss = sentiment_scorer.score_unscored()
-        delta = opp_delta.snapshot_and_alert()
-        ts = themes_reg.score_all(fetch_missing=False)
-        return ":mag: Sentiment + scores + themes", {"sentiment_scored": ss,
-                                                      "delta_alerts": delta.get("new_alerts", 0),
-                                                      "themes_scored": len(ts)}
-    if idx == 8:
-        b = broker_sync.sync_all()
-        a = alert_engine.run()
-        cu = ca.evaluate()
-        d = discord_notifier.push_unsent()
-        return ":rotating_light: Brokers + alerts + notify", {"brokers": b, "alerts": a,
-                                                               "custom_alerts": cu,
-                                                               "discord_pushed": d}
-    return "done", {}
-
-
-_REFRESH_PHASES = 9
-
-if st.session_state.get("_dk_refresh_phase") is not None:
-    phase = st.session_state["_dk_refresh_phase"]
-    st.markdown(ui_style.brand_bar(right=f"refresh phase {phase + 1}/{_REFRESH_PHASES}"),
-                unsafe_allow_html=True)
-    if phase >= _REFRESH_PHASES:
-        # Done
-        summary = st.session_state.get("_dk_partial_summary", {})
-        st.session_state["_dk_last_summary"] = summary
-        st.session_state["_dk_refresh_phase"] = None
-        st.session_state.pop("_dk_partial_summary", None)
-        st.toast("Refresh complete!", icon="✅")
-        st.rerun()
-    else:
-        progress = phase / _REFRESH_PHASES
-        st.progress(progress, text=f"Phase {phase + 1} of {_REFRESH_PHASES}")
-        try:
-            label, result = _run_refresh_phase(phase)
-            st.success(f"✓ {label}")
-            partial = st.session_state.setdefault("_dk_partial_summary", {})
-            partial.update(result)
-        except Exception as e:
-            import traceback
-            st.error(f"Phase {phase + 1} failed: **{type(e).__name__}** — {e}")
-            st.code(traceback.format_exc(), language="python")
-            st.session_state["_dk_refresh_phase"] = None
-            if st.button("Continue anyway"):
-                st.session_state["_dk_refresh_phase"] = phase + 1
-                st.rerun()
-            st.stop()
-        st.session_state["_dk_refresh_phase"] = phase + 1
-        # Tiny pause to let the UI flush, then rerun for next phase
-        import time
-        time.sleep(0.2)
-        st.rerun()
 
 
 def q(sql: str, params: tuple = ()) -> pd.DataFrame:
@@ -298,10 +190,21 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 # Handle toolbar actions
 if refresh_clicked:
-    # Kick off the chunked refresh state machine. Each phase runs in its own
-    # rerun so the WebSocket stays alive and the user sees live progress.
-    st.session_state["_dk_refresh_phase"] = 0
-    st.session_state["_dk_partial_summary"] = {}
+    # Simple, reliable spinner pattern. Runs the full poll in one call.
+    # The spinner shows a circular loading icon with descriptive text the
+    # ENTIRE time the fetch runs. After it completes, rerun to repaint.
+    with st.spinner("🔄 Refreshing DK data — pulling prices, news, sentiment, themes, "
+                    "trending, brokers, alerts. Takes ~30-45 seconds. The page will "
+                    "freeze briefly while this runs, then redraw with fresh data."):
+        try:
+            summary = poller.run_once()
+            st.session_state["_dk_last_summary"] = summary
+        except Exception as e:
+            import traceback
+            st.error(f"Refresh failed: **{type(e).__name__}** — {e}")
+            st.code(traceback.format_exc(), language="python")
+            st.stop()
+    st.toast("Refresh complete!", icon="✅")
     st.rerun()
 
 # Show the last run summary (after a refresh completes)
