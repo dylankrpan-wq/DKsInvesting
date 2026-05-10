@@ -31,6 +31,7 @@ from dk.config import _load_user_additions as _load_user_additions_fn
 from dk.ui import style as ui_style
 from dk.ui.chart_modal import clickable_table
 from dk.ui import chart_studio
+from dk.ui import glossary as ui_glossary
 from dk.notes import journal as notes_mod
 from dk.themes import registry as themes_reg
 from dk.digest import daily as digest_mod
