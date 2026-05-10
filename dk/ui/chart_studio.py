@@ -264,7 +264,7 @@ def render(symbol: str, key: str = "cs", default_period: str = "3mo") -> None:
                                     index=0, label_visibility="collapsed", key=f"{key}_lower")
 
     # ---- Fetch ----
-    with st.spinner(f"Fetching {symbol} {period}/{interval}..."):
+    with st.spinner(f":satellite: Fetching {symbol} {period}/{interval} bars from yfinance..."):
         df = _fetch(symbol, period, interval)
     if df.empty:
         st.warning(f"No data returned for {symbol} {period}/{interval}. "

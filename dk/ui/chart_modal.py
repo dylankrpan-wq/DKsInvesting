@@ -18,6 +18,9 @@ def show_chart_for(symbol: str) -> None:
         st.error("No symbol provided.")
         return
 
+    _loading = st.empty()
+    _loading.info(f":hourglass_flowing_sand: Loading chart for **{symbol}**...")
+
     # Try equity prices first; fall back to crypto if no equity bars exist.
     with sqlite3.connect(DB_PATH) as c:
         eq = pd.read_sql_query(
@@ -46,6 +49,7 @@ def show_chart_for(symbol: str) -> None:
             c, params=(symbol,),
         )
 
+    _loading.empty()
     st.markdown(f"### {symbol}")
 
     # ---- Stat cards ----

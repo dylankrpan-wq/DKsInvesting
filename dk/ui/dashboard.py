@@ -189,8 +189,19 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 # Handle toolbar actions
 if refresh_clicked:
-    with st.spinner("Polling sources, scoring sentiment, running alerts..."):
+    with st.status(":arrows_counterclockwise: Refreshing DK data...", expanded=True) as _status:
+        st.write(":chart_with_upwards_trend: Pulling prices + earnings...")
+        st.write(":newspaper: Fetching news from 7 RSS feeds + per-ticker Yahoo...")
+        st.write(":coin: Pulling crypto snapshots...")
+        st.write(":calendar: Loading macro calendar + IPO pipeline...")
+        st.write(":robot_face: Fetching TradingView technical ratings...")
+        st.write(":telescope: Running discovery scanner + Reddit trending...")
+        st.write(":rocket: Scoring 15 themes...")
+        st.write(":mag: Computing sentiment + opportunity scores...")
+        st.write(":lock: Syncing connected brokers...")
+        st.write(":rotating_light: Running alert engine...")
         summary = poller.run_once()
+        _status.update(label=":white_check_mark: Refresh complete", state="complete", expanded=False)
     st.toast("Refresh complete", icon="✓")
     with st.expander("Run summary", expanded=False):
         st.json(summary)
@@ -218,11 +229,16 @@ with tab_themes:
     st.caption("Curated thematic baskets — like Schwab Theme Packs. Each shows aggregate "
                "DK score, sentiment, and 1-day move across constituents, plus the **why**.")
     if st.button("Refresh theme scores (incl. on-demand price fetch)", key="themes_refresh"):
-        with st.spinner("Fetching prices for any non-watchlist constituents..."):
+        with st.spinner(":satellite: Fetching prices for non-watchlist constituents and rescoring 15 themes..."):
             themes_reg.score_all(fetch_missing=True)
         st.success("Themes refreshed")
         st.rerun()
-    scored = themes_reg.score_all(fetch_missing=False)
+
+    @st.cache_data(ttl=60, show_spinner="Scoring themes...")
+    def _cached_score_all():
+        return themes_reg.score_all(fetch_missing=False)
+
+    scored = _cached_score_all()
     if not scored:
         st.info("No themes scored yet. Click the refresh button above.")
     else:
@@ -558,8 +574,9 @@ with tab_charts:
                 "in the toolbar to fetch the watchlist's ratings; for off-watchlist symbols "
                 "use the Refresh button below.")
         if st.button(f"Fetch TV ratings for {chart_sym}"):
-            from dk.sources import tradingview_ratings as tvr
-            n = tvr.fetch_for_symbol(chart_sym, intervals=["1h", "1d", "1W"])
+            with st.spinner(f":robot_face: Pulling TradingView technical ratings for {chart_sym} (3 timeframes)..."):
+                from dk.sources import tradingview_ratings as tvr
+                n = tvr.fetch_for_symbol(chart_sym, intervals=["1h", "1d", "1W"])
             st.success(f"Pulled {n} ratings for {chart_sym}")
             st.rerun()
     else:
@@ -572,7 +589,7 @@ with tab_portfolio:
     st.caption(":lock: Read-only. Add credentials in `config/secrets.env` to connect a broker.")
 
     if st.button("Sync brokers now"):
-        with st.spinner("Pulling positions from configured brokers..."):
+        with st.spinner(":lock: Authenticating + pulling read-only positions from each configured broker..."):
             res = broker_sync.sync_all()
         st.json(res)
         st.rerun()
@@ -633,7 +650,7 @@ with tab_thesis:
     universe = sorted(set(equity_syms + candidate_syms))
     th_sym = st.selectbox("Ticker", universe, key="thesis_sym")
     if st.button("Build thesis", type="primary"):
-        with st.spinner(f"Researching {th_sym}..."):
+        with st.spinner(f":mag: Building thesis for {th_sym} — pulling business meta, indicators, sentiment, catalysts..."):
             t = thesis_gen.build(th_sym)
         if th_sym.upper() in OWNED:
             st.success(f":lock: You hold {th_sym} in a connected broker account.")
@@ -726,7 +743,7 @@ with tab_discover:
                "Validated through yfinance (real ticker, market cap > $200M, price > $1).")
     col_a, col_b = st.columns([1, 1])
     if col_a.button("Run discovery scan now"):
-        with st.spinner("Mining news, validating tickers, scoring..."):
+        with st.spinner(":telescope: Mining news headlines for tickers, validating each via yfinance, scoring through opportunity engine..."):
             res = discovery.scan(min_mentions=3, max_validate=20)
         st.success(f"Validated {res['validated']} candidates "
                    f"({res['rejected']} rejected, {res['raw_count']} raw mentions).")
@@ -891,7 +908,7 @@ with tab_watch:
                 st.error("Ticker is required.")
             elif new_kind in ("equities", "etfs"):
                 # Validate via yfinance
-                with st.spinner(f"Validating {new_sym} via yfinance..."):
+                with st.spinner(f":mag: Validating {new_sym} via yfinance and backfilling 3 months of price history..."):
                     try:
                         import yfinance as yf
                         t = yf.Ticker(new_sym)
