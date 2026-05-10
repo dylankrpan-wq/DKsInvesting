@@ -201,25 +201,9 @@ if mark_seen_clicked:
         c.commit()
     st.rerun()
 
-# Sidebar kept minimal — just system info + advanced toggles
-st.sidebar.markdown(
-    '<div style="display:flex;align-items:center;gap:10px;padding:6px 0 14px 0;">'
-    '  <div style="width:30px;height:30px;border-radius:8px;'
-    '       background:linear-gradient(135deg,#00d4aa,#4ea1ff);'
-    '       display:grid;place-items:center;font-weight:800;color:#062019;">DK</div>'
-    '  <div style="font-weight:700;font-size:16px;color:#e8ecf4;">System</div>'
-    '</div>',
-    unsafe_allow_html=True,
-)
-ui_style.sidebar_section("INFO")
-st.sidebar.markdown(
-    f"<div style='color:#8b95ad;font-size:12px;line-height:1.8;'>"
-    f"Sentiment engine: <code style='color:#00d4aa;'>{senti_engine}</code><br>"
-    f"DB path: <code style='color:#8b95ad;'>data/dk.db</code><br>"
-    f"Edit watchlist: <code style='color:#8b95ad;'>config/watchlist.yaml</code>"
-    f"</div>",
-    unsafe_allow_html=True,
-)
+# ---- Left sidebar: Key & Glossary popout drawer ----
+# Click the « arrow at top-left of the page to expand. Click again to collapse to a thin tab.
+ui_glossary.render_sidebar_glossary()
 
 (tab_opps, tab_thesis, tab_themes, tab_charts, tab_discover, tab_tools,
  tab_alerts, tab_watch, tab_portfolio, tab_sentiment, tab_news, tab_earnings,
