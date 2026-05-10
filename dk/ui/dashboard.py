@@ -51,6 +51,38 @@ except st.errors.StreamlitAPIException:
 ui_style.inject()
 store.init_db()
 
+# ---- Deferred refresh handler ----
+# Long-running poller blocks the render thread, so we run it on a dedicated
+# pass with ONLY the status panel visible, then rerun to repaint the full
+# dashboard with fresh data. No more half-rendered/blank intermediate screen.
+if st.session_state.get("_dk_refresh_pending"):
+    st.session_state.pop("_dk_refresh_pending", None)
+    st.markdown(ui_style.brand_bar(right="refreshing..."), unsafe_allow_html=True)
+    with st.status(":arrows_counterclockwise: Refreshing DK data... please wait ~30-45 seconds",
+                   expanded=True) as _status:
+        st.write(":chart_with_upwards_trend: Pulling prices + earnings...")
+        st.write(":newspaper: Fetching news from RSS feeds + per-ticker Yahoo...")
+        st.write(":coin: Pulling crypto snapshots...")
+        st.write(":calendar: Loading macro calendar + IPO pipeline...")
+        st.write(":robot_face: Fetching TradingView technical ratings...")
+        st.write(":telescope: Running discovery scanner + Reddit trending...")
+        st.write(":rocket: Scoring 15 themes...")
+        st.write(":mag: Computing sentiment + opportunity scores...")
+        st.write(":lock: Syncing connected brokers...")
+        st.write(":rotating_light: Running alert engine...")
+        try:
+            summary = poller.run_once()
+            st.session_state["_dk_last_summary"] = summary
+            _status.update(label=":white_check_mark: Refresh complete!",
+                            state="complete", expanded=False)
+        except Exception as e:
+            import traceback
+            _status.update(label=f":x: Refresh failed: {e}", state="error", expanded=True)
+            st.error(f"**{type(e).__name__}**: {e}")
+            st.code(traceback.format_exc(), language="python")
+            st.stop()
+    st.rerun()
+
 
 def q(sql: str, params: tuple = ()) -> pd.DataFrame:
     with sqlite3.connect(DB_PATH) as c:
@@ -189,22 +221,16 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 # Handle toolbar actions
 if refresh_clicked:
-    with st.status(":arrows_counterclockwise: Refreshing DK data...", expanded=True) as _status:
-        st.write(":chart_with_upwards_trend: Pulling prices + earnings...")
-        st.write(":newspaper: Fetching news from 7 RSS feeds + per-ticker Yahoo...")
-        st.write(":coin: Pulling crypto snapshots...")
-        st.write(":calendar: Loading macro calendar + IPO pipeline...")
-        st.write(":robot_face: Fetching TradingView technical ratings...")
-        st.write(":telescope: Running discovery scanner + Reddit trending...")
-        st.write(":rocket: Scoring 15 themes...")
-        st.write(":mag: Computing sentiment + opportunity scores...")
-        st.write(":lock: Syncing connected brokers...")
-        st.write(":rotating_light: Running alert engine...")
-        summary = poller.run_once()
-        _status.update(label=":white_check_mark: Refresh complete", state="complete", expanded=False)
-    st.toast("Refresh complete", icon="✓")
-    with st.expander("Run summary", expanded=False):
-        st.json(summary)
+    # Set a flag and rerun. The deferred handler at the top of the script
+    # picks this up and runs the poller on its own clean render pass.
+    st.session_state["_dk_refresh_pending"] = True
+    st.rerun()
+
+# Show the last run summary (after a refresh completes)
+_last_summary = st.session_state.get("_dk_last_summary")
+if _last_summary:
+    with st.expander(":white_check_mark: Last refresh — run summary", expanded=False):
+        st.json(_last_summary)
 
 if mark_seen_clicked:
     with sqlite3.connect(DB_PATH) as c:
