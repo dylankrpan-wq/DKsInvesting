@@ -26,6 +26,8 @@ from dk.thesis import generator as thesis_gen
 from dk.indicators import ta as ta_mod
 from dk.brokers import all_configured as configured_brokers
 from dk.brokers import sync as broker_sync
+from dk.brokers import ALL_BROKERS as _ALL_BROKER_CLASSES
+from dk.config import _load_user_additions as _load_user_additions_fn
 from dk.ui import style as ui_style
 from dk.ui.chart_modal import clickable_table
 from dk.ui import chart_studio
@@ -520,39 +522,39 @@ with tab_charts:
     chart_universe = sorted(set(equity_syms + candidate_syms))
     chart_sym = st.selectbox("Symbol", chart_universe, key="tv_chart_sym")
 
-    # TradingView Advanced Chart embed (free, official widget)
-    tv_exchange = "NASDAQ"  # default; widget auto-resolves prefix
-    tv_html = f"""
-    <div class="tradingview-widget-container" style="height:560px;">
-      <div id="tradingview_widget"></div>
-      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-      <script type="text/javascript">
-        new TradingView.widget({{
-          "autosize": true,
-          "symbol": "{tv_exchange}:{chart_sym}",
-          "interval": "D",
-          "timezone": "Etc/UTC",
-          "theme": "dark",
-          "style": "1",
-          "locale": "en",
-          "enable_publishing": false,
-          "allow_symbol_change": true,
-          "container_id": "tradingview_widget",
-          "studies": [
-            "MASimple@tv-basicstudies",
-            "RSI@tv-basicstudies",
-            "MACD@tv-basicstudies"
-          ],
-          "withdateranges": true,
-          "hide_side_toolbar": false,
-          "details": true,
-          "hotlist": true,
-          "calendar": true
-        }});
-      </script>
-    </div>
-    """
-    st.components.v1.html(tv_html, height=580, scrolling=False)
+    # TradingView Advanced Chart — wrap in try/except so a TV outage can't break the page
+    tv_exchange = "NASDAQ"
+    try:
+        import streamlit.components.v1 as components
+        tv_html = f"""
+        <div class="tradingview-widget-container" style="height:560px;">
+          <div id="tradingview_widget"></div>
+          <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+          <script type="text/javascript">
+            new TradingView.widget({{
+              "autosize": true,
+              "symbol": "{tv_exchange}:{chart_sym}",
+              "interval": "D",
+              "timezone": "Etc/UTC",
+              "theme": "dark",
+              "style": "1",
+              "locale": "en",
+              "enable_publishing": false,
+              "allow_symbol_change": true,
+              "container_id": "tradingview_widget",
+              "studies": ["MASimple@tv-basicstudies","RSI@tv-basicstudies","MACD@tv-basicstudies"],
+              "withdateranges": true,
+              "hide_side_toolbar": false,
+              "details": true,
+              "hotlist": true,
+              "calendar": true
+            }});
+          </script>
+        </div>
+        """
+        components.html(tv_html, height=580, scrolling=False)
+    except Exception as e:
+        st.warning(f"TradingView widget could not load: {e}. Use the chart studio in the Watchlist or Thesis tab as an alternative.")
 
     # TradingView ratings table for this symbol across intervals
     tv_df = q("""SELECT interval, recommendation, buy_signals, sell_signals,
@@ -626,8 +628,12 @@ with tab_portfolio:
         )
 
     with st.expander("How to connect a broker"):
-        for cls_inst in [c() for c in __import__("dk.brokers", fromlist=["ALL_BROKERS"]).ALL_BROKERS]:
-            st.markdown(f"**{cls_inst.name}** — {cls_inst.setup_hint()}")
+        for cls in _ALL_BROKER_CLASSES:
+            try:
+                inst = cls()
+                st.markdown(f"**{inst.name}** — {inst.setup_hint()}")
+            except Exception as e:
+                st.markdown(f"_(broker init error: {e})_")
 
 with tab_thesis:
     st.subheader("Deep-dive thesis")
@@ -937,7 +943,7 @@ with tab_watch:
                         st.rerun()
 
     # ---- Remove user-added tickers ----
-    user_data = _load_user_data_for_ui = __import__("dk.config", fromlist=["_load_user_additions"])._load_user_additions()
+    user_data = _load_user_additions_fn()
     user_syms = []
     for kind in ("equities", "etfs", "crypto"):
         for e in user_data.get(kind, []):

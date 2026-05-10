@@ -199,34 +199,37 @@ def render(symbol: str, key: str = "cs", default_period: str = "3mo") -> None:
     source = c1.selectbox("Source", ["yfinance", "TradingView"], key=f"{key}_src")
 
     if source == "TradingView":
-        # Defer entirely to the TV widget — it has its own controls
-        tv_html = f"""
-        <div class="tradingview-widget-container" style="height:560px;">
-          <div id="tv_widget_{key}"></div>
-          <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-          <script type="text/javascript">
-            new TradingView.widget({{
-              "autosize": true,
-              "symbol": "NASDAQ:{symbol}",
-              "interval": "D",
-              "timezone": "Etc/UTC",
-              "theme": "dark",
-              "style": "1",
-              "locale": "en",
-              "container_id": "tv_widget_{key}",
-              "studies": ["MASimple@tv-basicstudies","RSI@tv-basicstudies"],
-              "withdateranges": true,
-              "details": true,
-              "hotlist": true,
-              "calendar": true,
-              "allow_symbol_change": true
-            }});
-          </script>
-        </div>
-        """
-        st.components.v1.html(tv_html, height=580, scrolling=False)
-        st.caption(":bulb: TradingView's own chart — log into TradingView in this browser to bring "
-                   "your saved indicators and drawings.")
+        try:
+            import streamlit.components.v1 as components
+            tv_html = f"""
+            <div class="tradingview-widget-container" style="height:560px;">
+              <div id="tv_widget_{key}"></div>
+              <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+              <script type="text/javascript">
+                new TradingView.widget({{
+                  "autosize": true,
+                  "symbol": "NASDAQ:{symbol}",
+                  "interval": "D",
+                  "timezone": "Etc/UTC",
+                  "theme": "dark",
+                  "style": "1",
+                  "locale": "en",
+                  "container_id": "tv_widget_{key}",
+                  "studies": ["MASimple@tv-basicstudies","RSI@tv-basicstudies"],
+                  "withdateranges": true,
+                  "details": true,
+                  "hotlist": true,
+                  "calendar": true,
+                  "allow_symbol_change": true
+                }});
+              </script>
+            </div>
+            """
+            components.html(tv_html, height=580, scrolling=False)
+            st.caption(":bulb: TradingView's own chart — log into TradingView in this browser to bring "
+                       "your saved indicators and drawings.")
+        except Exception as e:
+            st.warning(f"TradingView widget could not load: {e}. Switch source to yfinance.")
         return
 
     period = c2.selectbox(
