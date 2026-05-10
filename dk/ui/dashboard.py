@@ -35,12 +35,18 @@ from dk.notes import journal as notes_mod
 from dk.themes import registry as themes_reg
 from dk.digest import daily as digest_mod
 
-st.set_page_config(
-    page_title="DK Investing",
-    layout="wide",
-    page_icon=":chart_with_upwards_trend:",
-    initial_sidebar_state="collapsed",
-)
+# Page config is set by streamlit_app.py (the Cloud entry point) so it runs before any other
+# st.* call. We avoid calling it here since duplicate calls raise an error.
+try:
+    st.set_page_config(
+        page_title="DK Investing",
+        layout="wide",
+        page_icon=":chart_with_upwards_trend:",
+        initial_sidebar_state="collapsed",
+    )
+except st.errors.StreamlitAPIException:
+    pass  # already set by entry point — fine
+
 ui_style.inject()
 store.init_db()
 
