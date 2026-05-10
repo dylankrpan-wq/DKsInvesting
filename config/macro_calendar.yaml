@@ -1,0 +1,146 @@
+# Hardcoded high-importance US macro events for 2026.
+# Importance: 1 (low) ... 3 (market-moving)
+# Edit / extend freely. Pulled into macro_events table on each poll.
+
+events:
+  # ----- Fed FOMC meetings (decision Wednesdays) -----
+  - date: 2026-01-28
+    category: FOMC
+    title: FOMC rate decision + statement
+    importance: 3
+  - date: 2026-03-18
+    category: FOMC
+    title: FOMC rate decision + SEP
+    importance: 3
+  - date: 2026-04-29
+    category: FOMC
+    title: FOMC rate decision + statement
+    importance: 3
+  - date: 2026-06-17
+    category: FOMC
+    title: FOMC rate decision + SEP
+    importance: 3
+  - date: 2026-07-29
+    category: FOMC
+    title: FOMC rate decision + statement
+    importance: 3
+  - date: 2026-09-16
+    category: FOMC
+    title: FOMC rate decision + SEP
+    importance: 3
+  - date: 2026-11-04
+    category: FOMC
+    title: FOMC rate decision + statement
+    importance: 3
+  - date: 2026-12-16
+    category: FOMC
+    title: FOMC rate decision + SEP
+    importance: 3
+
+  # ----- CPI (typically mid-month) -----
+  - date: 2026-05-12
+    category: CPI
+    title: US CPI (April)
+    importance: 3
+  - date: 2026-06-10
+    category: CPI
+    title: US CPI (May)
+    importance: 3
+  - date: 2026-07-15
+    category: CPI
+    title: US CPI (June)
+    importance: 3
+  - date: 2026-08-12
+    category: CPI
+    title: US CPI (July)
+    importance: 3
+  - date: 2026-09-10
+    category: CPI
+    title: US CPI (August)
+    importance: 3
+  - date: 2026-10-14
+    category: CPI
+    title: US CPI (September)
+    importance: 3
+  - date: 2026-11-12
+    category: CPI
+    title: US CPI (October)
+    importance: 3
+  - date: 2026-12-10
+    category: CPI
+    title: US CPI (November)
+    importance: 3
+
+  # ----- NFP / Jobs Report (first Friday) -----
+  - date: 2026-05-01
+    category: NFP
+    title: US Nonfarm Payrolls (April)
+    importance: 3
+  - date: 2026-06-05
+    category: NFP
+    title: US Nonfarm Payrolls (May)
+    importance: 3
+  - date: 2026-07-02
+    category: NFP
+    title: US Nonfarm Payrolls (June)
+    importance: 3
+  - date: 2026-08-07
+    category: NFP
+    title: US Nonfarm Payrolls (July)
+    importance: 3
+  - date: 2026-09-04
+    category: NFP
+    title: US Nonfarm Payrolls (August)
+    importance: 3
+  - date: 2026-10-02
+    category: NFP
+    title: US Nonfarm Payrolls (September)
+    importance: 3
+  - date: 2026-11-06
+    category: NFP
+    title: US Nonfarm Payrolls (October)
+    importance: 3
+  - date: 2026-12-04
+    category: NFP
+    title: US Nonfarm Payrolls (November)
+    importance: 3
+
+  # ----- US market holidays (markets closed) -----
+  - date: 2026-05-25
+    category: HOLIDAY
+    title: NYSE/NASDAQ closed — Memorial Day
+    importance: 1
+  - date: 2026-06-19
+    category: HOLIDAY
+    title: NYSE/NASDAQ closed — Juneteenth
+    importance: 1
+  - date: 2026-07-03
+    category: HOLIDAY
+    title: NYSE/NASDAQ early close — Independence Day eve
+    importance: 1
+  - date: 2026-09-07
+    category: HOLIDAY
+    title: NYSE/NASDAQ closed — Labor Day
+    importance: 1
+  - date: 2026-11-26
+    category: HOLIDAY
+    title: NYSE/NASDAQ closed — Thanksgiving
+    importance: 1
+  - date: 2026-11-27
+    category: HOLIDAY
+    title: NYSE/NASDAQ early close (1pm ET) — day after Thanksgiving
+    importance: 1
+  - date: 2026-12-24
+    category: HOLIDAY
+    title: NYSE/NASDAQ early close — Christmas Eve
+    importance: 1
+  - date: 2026-12-25
+    category: HOLIDAY
+    title: NYSE/NASDAQ closed — Christmas
+    importance: 1
+
+  # ----- Crypto / global (placeholders — extend freely) -----
+  - date: 2028-04-01
+    category: CRYPTO
+    title: Estimated next Bitcoin halving (~April 2028)
+    importance: 3

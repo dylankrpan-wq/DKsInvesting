@@ -1,0 +1,95 @@
+# DK Investing — themed baskets ("theme packs"), Schwab-style.
+# Edit freely. Each theme aggregates its constituents' opportunity score,
+# sentiment, and 1d price change. Tickers don't need to be on your watchlist —
+# the system fetches/scores them on-demand.
+
+themes:
+  - id: ai_compute
+    name: AI & Compute Infrastructure
+    category: Technology
+    description: Picks-and-shovels for the AI buildout — chips, networking, hyperscalers, server vendors.
+    constituents: [NVDA, AMD, AVGO, MSFT, GOOGL, META, ANET, SMCI, DELL, MU, TSM, ASML]
+
+  - id: quantum
+    name: Quantum Computing
+    category: Frontier Tech
+    description: Pure-plays and well-funded entrants in quantum hardware/software.
+    constituents: [IONQ, RGTI, QBTS, QUBT, IBM]
+
+  - id: space
+    name: Space & Satellite
+    category: Frontier Tech
+    description: Launch, satellite ops, space-based comms.
+    constituents: [ASTS, RKLB, LUNR, RDW, IRDM, GSAT, BKSY]
+
+  - id: defense
+    name: Defense & Aerospace
+    category: Industrial
+    description: Prime contractors and defense-tech beneficiaries.
+    constituents: [LMT, RTX, NOC, GD, BA, KTOS, AVAV, LDOS, HII, PLTR]
+
+  - id: cyber
+    name: Cybersecurity
+    category: Technology
+    description: Endpoint, identity, network, cloud security.
+    constituents: [PANW, CRWD, ZS, NET, FTNT, OKTA, S, RBRK, CYBR]
+
+  - id: semis
+    name: Semiconductors (broad)
+    category: Technology
+    description: Logic + memory + equipment.
+    constituents: [NVDA, AMD, INTC, TSM, AVGO, MU, AMAT, KLAC, LRCX, ASML, MRVL, ON, ADI]
+
+  - id: rare_earths
+    name: Rare Earths & Critical Minerals
+    category: Materials
+    description: US/allied supply chain plays for rare earths and critical minerals.
+    constituents: [MP, USAR, TMC, LAC, ALB, ARRY]
+
+  - id: clean_energy
+    name: Clean Energy & Solar
+    category: Energy
+    description: Solar, wind, storage, hydrogen.
+    constituents: [ENPH, FSLR, NEE, RUN, SEDG, ARRY, BE, PLUG, BLDP]
+
+  - id: nuclear_smr
+    name: Nuclear & SMRs
+    category: Energy
+    description: Conventional nuclear utilities + small modular reactor pure-plays.
+    constituents: [SMR, OKLO, NNE, BWXT, CCJ, LEU, UEC, VST, CEG]
+
+  - id: ev_batt
+    name: EV & Batteries
+    category: Industrial
+    description: Auto OEMs, charging, battery materials.
+    constituents: [TSLA, RIVN, LCID, NIO, XPEV, CHPT, EVGO, ALB, LIT]
+
+  - id: biotech_glp1
+    name: Biotech / GLP-1 Obesity
+    category: Healthcare
+    description: GLP-1 leaders + emerging metabolic-disease challengers.
+    constituents: [LLY, NVO, AMGN, VKTX, ALT, RVMD, MDGL]
+
+  - id: data_centers
+    name: Data Centers & Power
+    category: Real Assets
+    description: Data-center REITs and the power/grid plays feeding them.
+    constituents: [DLR, EQIX, IRM, CEG, VST, NEE, GEV, AES, NRG, TLN]
+
+  - id: crypto_eq
+    name: Crypto-adjacent equities
+    category: Crypto
+    description: Equities that derive value from crypto adoption.
+    constituents: [COIN, MSTR, MARA, RIOT, CLSK, HOOD, GLXY, IREN]
+
+  - id: robotics
+    name: Robotics & Automation
+    category: Industrial
+    description: Industrial automation, humanoid robotics, machine vision.
+    constituents: [ABB, ROK, EMR, IRBT, SYM, NVDA, TSLA, FANUY]
+
+  - id: cannabis
+    name: Cannabis (high-risk)
+    category: Speculative
+    description: Cannabis MSOs and Canadian LPs. Volatile, regulatory-driven.
+    constituents: [CGC, TLRY, ACB, GTBIF, CURLF, TCNNF, CRON]

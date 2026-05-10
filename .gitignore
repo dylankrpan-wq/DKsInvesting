@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+config/secrets.env
+config/watchlist_user.yaml
+data/
+*.db
+*.db-journal
+.streamlit/secrets.toml
+.DS_Store
+*.log
+.idea/
+.vscode/
+*.swp
+uv.lock
+.claude/

@@ -1,0 +1,86 @@
+# DK Investing watchlist
+# Edit freely — the poller picks this up on every run.
+# Tickers flagged with `verify: true` need user confirmation.
+
+equities:
+  - symbol: AAPL
+    name: Apple
+    region: US
+  - symbol: MSFT
+    name: Microsoft
+    region: US
+  - symbol: NVDA
+    name: NVIDIA
+    region: US
+  - symbol: AMD
+    name: AMD
+    region: US
+  - symbol: INTC
+    name: Intel
+    region: US
+  - symbol: MU
+    name: Micron
+    region: US
+  - symbol: HOOD
+    name: Robinhood
+    region: US
+  - symbol: ASTS
+    name: AST SpaceMobile
+    region: US
+  - symbol: SPT
+    name: Sprout Social
+    region: US
+  - symbol: RR
+    name: Richtech Robotics
+    region: US
+  - symbol: DRAM
+    name: DRAM
+    region: US
+
+etfs:
+  - symbol: QQQ
+    name: Invesco QQQ
+    region: US
+  - symbol: VOO
+    name: Vanguard S&P 500
+    region: US
+  - symbol: IBIT
+    name: iShares Bitcoin Trust
+    region: US
+  - symbol: ETHE
+    name: Grayscale Ethereum Trust
+    region: US
+
+crypto:
+  - symbol: BTC
+    coingecko_id: bitcoin
+  - symbol: ETH
+    coingecko_id: ethereum
+  - symbol: XRP
+    coingecko_id: ripple
+
+regions:
+  - US
+  - EU
+  - ASIA
+  - GLOBAL
+
+alerts:
+  price_move_pct: 5.0          # flag daily moves >= 5%
+  volume_spike_x: 3.0          # flag volume >= 3x 20d avg
+  earnings_window_days: 7      # flag earnings within next N days
+  sentiment_threshold: 0.6     # |compound score| >= this is "strong"
+  sentiment_min_articles: 3    # require N articles in window for ticker-level sentiment surge
+  macro_window_days: 3         # alert importance>=2 macro events within N days
+
+sentiment:
+  engine: vader   # options: vader (fast, free) | finbert (heavier, financial-tuned, opt-in)
+
+opportunity:
+  rank_jump_threshold: 3       # alert when ticker climbs >= N ranks
+  rank_jump_min_score: 35.0    # ...and current score >= this (filter noise)
+  score_surge_points: 10.0     # alert when score gains >= N points between snapshots
+  new_top_k: 5                 # alert when ticker enters top K from outside
+
+notifications:
+  discord_webhook_env: DISCORD_WEBHOOK_URL  # set in secrets.env to enable Discord alerts

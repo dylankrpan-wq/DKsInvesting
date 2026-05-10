@@ -1,0 +1,30 @@
+name: Refresh DK data
+
+# Pings the deployed Streamlit Cloud app every 15 minutes during US market hours.
+# This keeps the app warm and triggers its internal refresh logic on each visit.
+#
+# To use:
+#   1. Deploy to Streamlit Cloud and copy the public URL
+#   2. In your GitHub repo: Settings → Secrets and variables → Actions → New repository secret
+#      Name: DK_APP_URL    Value: https://your-app.streamlit.app
+#   3. Enable Actions on the repo (it's on by default for new repos)
+
+on:
+  schedule:
+    # Every 15 minutes, weekdays, 13:30–21:00 UTC (US market 9:30am-5pm ET)
+    - cron: "*/15 13-20 * * 1-5"
+  workflow_dispatch:  # allow manual triggering
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping app
+        env:
+          URL: ${{ secrets.DK_APP_URL }}
+        run: |
+          if [ -z "$URL" ]; then
+            echo "DK_APP_URL secret not set. Skipping."
+            exit 0
+          fi
+          curl -s -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n" "$URL"
