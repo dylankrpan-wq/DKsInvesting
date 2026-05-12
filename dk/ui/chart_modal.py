@@ -18,6 +18,18 @@ def show_chart_for(symbol: str) -> None:
         st.error("No symbol provided.")
         return
 
+    # Explicit close button — sets the closed flag for ALL clickable tables.
+    # (We can't tie it to a specific key here, so set every known closed_key
+    # to True. Cheap and effective.)
+    close_col1, close_col2 = st.columns([6, 1])
+    with close_col2:
+        if st.button("✕ Close", key=f"close_{symbol}", help="Close this chart preview"):
+            # Mark every clickable_table's modal as closed for this session
+            for k in list(st.session_state.keys()):
+                if k.startswith("_dk_modal_closed__"):
+                    st.session_state[k] = True
+            st.rerun()
+
     _loading = st.empty()
     _loading.info(f":hourglass_flowing_sand: Loading chart for **{symbol}**...")
 
@@ -117,7 +129,14 @@ def show_chart_for(symbol: str) -> None:
 
 def clickable_table(df: pd.DataFrame, *, key: str, symbol_col: str = "symbol",
                     column_config: dict | None = None) -> None:
-    """Render a dataframe whose rows pop a chart modal on click."""
+    """Render a dataframe whose rows pop a chart modal on click.
+
+    The modal persists across reruns triggered by widgets INSIDE it
+    (e.g. changing the chart timeframe). User closes via the X button.
+    """
+    state_key = f"_dk_modal_sym__{key}"
+    closed_key = f"_dk_modal_closed__{key}"
+
     event = st.dataframe(
         df,
         use_container_width=True, hide_index=True,
@@ -125,8 +144,22 @@ def clickable_table(df: pd.DataFrame, *, key: str, symbol_col: str = "symbol",
         column_config=column_config,
         key=key,
     )
+
+    # Detect a fresh row selection
+    new_sym = None
     if event and getattr(event, "selection", None) and event.selection.rows:
         idx = event.selection.rows[0]
-        sym = df.iloc[idx][symbol_col]
-        if isinstance(sym, str) and sym:
-            show_chart_for(sym)
+        cand = df.iloc[idx][symbol_col]
+        if isinstance(cand, str) and cand:
+            new_sym = cand
+
+    current_sym = st.session_state.get(state_key)
+
+    # New row selected → open dialog with that symbol, clear any prior 'closed' flag
+    if new_sym and new_sym != current_sym:
+        st.session_state[state_key] = new_sym
+        st.session_state[closed_key] = False
+        show_chart_for(new_sym)
+    elif new_sym and new_sym == current_sym and not st.session_state.get(closed_key, False):
+        # Same symbol still selected → keep re-opening dialog through reruns
+        show_chart_for(current_sym)
