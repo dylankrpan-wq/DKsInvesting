@@ -124,3 +124,9 @@ themes:
     category: Miners
     description: Copper-focused producers. Levered to electrification + China demand.
     constituents: [FCX, SCCO, TECK, BHP, RIO, ERO, IVN, FM, HBM, TGB]
+
+  - id: crypto_miners
+    name: Crypto Miners
+    category: Miners
+    description: Pure-play Bitcoin/Ethereum mining operators + ASIC manufacturers. Levered to BTC price + hashrate economics.
+    constituents: [MARA, RIOT, CLSK, HUT, BITF, CIFR, IREN, BTBT, CAN, WULF, HIVE, CORZ, BTDR, GREE]
