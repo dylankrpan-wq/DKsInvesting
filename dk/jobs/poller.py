@@ -124,6 +124,15 @@ def run_once() -> dict:
     # Sentiment scoring (only unscored rows)
     summary["sentiment_scored"] = sentiment_scorer.score_unscored()
 
+    # Market-wide sentiment composite
+    from dk.sentiment import market as market_sent
+    try:
+        snap = market_sent.persist_snapshot()
+        summary["market_sentiment"] = snap.get("composite")
+    except Exception as e:
+        print(f"[market_sentiment] {e}")
+        summary["market_sentiment"] = None
+
     # Opportunity score snapshot + rank/score delta alerts
     from dk.opportunity import delta as opp_delta
     delta_summary = opp_delta.snapshot_and_alert()

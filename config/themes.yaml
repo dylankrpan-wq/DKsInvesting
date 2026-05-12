@@ -93,3 +93,34 @@ themes:
     category: Speculative
     description: Cannabis MSOs and Canadian LPs. Volatile, regulatory-driven.
     constituents: [CGC, TLRY, ACB, GTBIF, CURLF, TCNNF, CRON]
+
+  # ---- Miners ----
+  - id: gold_miners
+    name: Gold Miners
+    category: Miners
+    description: Major and mid-tier gold producers + royalty/streaming names. Levered to gold price.
+    constituents: [NEM, GOLD, AEM, FNV, WPM, AU, KGC, RGLD, AGI, BTG, EGO, IAG, NGD, OR, SAND]
+
+  - id: silver_miners
+    name: Silver Miners
+    category: Miners
+    description: Pure-play silver and silver-heavy polymetallic producers.
+    constituents: [PAAS, AG, HL, CDE, FSM, SVM, MAG, ASM, EXK, GATO]
+
+  - id: uranium_miners
+    name: Uranium Miners
+    category: Miners
+    description: Uranium producers, developers, and enrichment. Levered to nuclear demand cycle.
+    constituents: [CCJ, UEC, DNN, NXE, UUUU, LEU, BWXT, URG, EU, PALAF]
+
+  - id: lithium_miners
+    name: Lithium Miners
+    category: Miners
+    description: Hard-rock and brine lithium producers + developers. EV battery supply chain.
+    constituents: [LAC, ALB, SQM, PLL, LTHM, SGML, ABAT, CXOXF, ATLX]
+
+  - id: copper_miners
+    name: Copper Miners
+    category: Miners
+    description: Copper-focused producers. Levered to electrification + China demand.
+    constituents: [FCX, SCCO, TECK, BHP, RIO, ERO, IVN, FM, HBM, TGB]

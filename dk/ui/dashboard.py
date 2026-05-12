@@ -300,21 +300,108 @@ with tab_themes:
             )
             st.caption(":bulb: Click any constituent for the chart preview.")
 
-        # The "why" — recent catalyst news across constituents
-        st.markdown("##### Why is this theme moving — recent catalysts")
-        news = themes_reg.theme_news(sel, limit=8)
-        if not news:
-            st.caption("No recent strong-sentiment news for this theme's constituents.")
+        # ===== Theme score history =====
+        st.markdown("---")
+        st.markdown("##### :chart_with_upwards_trend: Theme score history")
+        th_hist = q("""SELECT snapshot_ts, aggregate_score, avg_sentiment, avg_price_chg_1d
+                       FROM theme_scores WHERE theme_id=? ORDER BY snapshot_ts ASC""",
+                    (sel["id"],))
+        if len(th_hist) >= 2:
+            import plotly.graph_objects as go
+            from plotly.subplots import make_subplots
+            fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3],
+                                vertical_spacing=0.06,
+                                subplot_titles=("Aggregate score over time", "Avg sentiment"))
+            fig.add_trace(go.Scatter(
+                x=th_hist["snapshot_ts"], y=th_hist["aggregate_score"],
+                mode="lines+markers", name="agg score",
+                line=ui_style.LINE_PRIMARY,
+                fill="tozeroy", fillcolor="rgba(0,212,170,0.10)",
+            ), row=1, col=1)
+            sent_colors = ["#00d4aa" if s and s > 0 else "#ff5d5d"
+                            for s in th_hist["avg_sentiment"]]
+            fig.add_trace(go.Bar(
+                x=th_hist["snapshot_ts"], y=th_hist["avg_sentiment"],
+                marker_color=sent_colors, name="sentiment",
+            ), row=2, col=1)
+            ui_style.style_fig(fig, height=380)
+            fig.update_yaxes(range=[0, 100], title="score", row=1, col=1)
+            fig.update_yaxes(title="sentiment", row=2, col=1)
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption(f"Theme '{sel['name']}' has been tracked across **{len(th_hist)} snapshots**. "
+                       "Each refresh adds one — the more you refresh, the richer this history gets.")
         else:
-            for n in news:
-                tone = ":green[+]" if (n.get("sentiment") or 0) > 0.05 else (
-                    ":red[−]" if (n.get("sentiment") or 0) < -0.05 else "·"
-                )
+            st.caption(f"Only **{len(th_hist)} snapshot(s)** so far. Refresh the data a few times "
+                       "to build a meaningful history for this theme.")
+
+        # ===== Constituent comparison chart =====
+        st.markdown("##### :crystal_ball: Constituent performance (30d)")
+        cs_data = sel.get("constituents_scored", [])
+        if cs_data:
+            sym_list = [c_["symbol"] for c_ in cs_data]
+            placeholders = ",".join("?" * len(sym_list))
+            perf = q(f"""SELECT symbol, ts, close FROM prices
+                         WHERE symbol IN ({placeholders})
+                           AND ts >= date('now', '-30 days')
+                         ORDER BY ts ASC""", tuple(sym_list))
+            if not perf.empty:
+                import plotly.graph_objects as go
+                pivot = perf.pivot(index="ts", columns="symbol", values="close").dropna(how="all")
+                # Normalize each to 100 at start
+                normalized = pivot.div(pivot.iloc[0]).mul(100) - 100  # % change from start
+                fig = go.Figure()
+                palette = [ui_style.ACCENT, ui_style.ACCENT_2, "#b66dff", ui_style.WARN,
+                           ui_style.BEAR, "#06d6a0", "#ffd166", "#ef476f", "#118ab2",
+                           "#fb5607", "#8338ec", "#3a86ff", "#06ffa5"]
+                for i, sym in enumerate(normalized.columns):
+                    fig.add_trace(go.Scatter(
+                        x=normalized.index, y=normalized[sym], mode="lines",
+                        name=sym, line=dict(color=palette[i % len(palette)], width=1.8),
+                    ))
+                ui_style.style_fig(fig, height=380)
+                fig.update_yaxes(title="% change vs 30d start", ticksuffix="%")
+                st.plotly_chart(fig, use_container_width=True)
+                st.caption("Each constituent normalized to 0% at start of window. Lines diverging "
+                           "from each other = idiosyncratic; moving together = sector-wide.")
+            else:
+                st.caption("Not enough price history yet for the constituents.")
+
+        # ===== Catalyst timeline =====
+        st.markdown("##### :scroll: Catalyst timeline — what's driving this theme")
+        timeline = q("""SELECT symbol, title, url, source, sentiment, published, fetched_at
+                        FROM news
+                        WHERE symbol IN ({})
+                          AND sentiment IS NOT NULL
+                          AND fetched_at >= datetime('now', '-30 days')
+                        ORDER BY fetched_at DESC
+                        LIMIT 30""".format(
+                            ",".join(f"'{s}'" for s in sym_list) if sym_list else "''")
+                     )
+        if timeline.empty:
+            st.caption("No recent news catalysts captured for this theme's constituents in the last 30 days.")
+        else:
+            # Group by date
+            timeline["date"] = pd.to_datetime(timeline["fetched_at"]).dt.date.astype(str)
+            for date_val, group in timeline.groupby("date", sort=False):
+                avg_tone = group["sentiment"].mean()
+                tone_color = "green" if avg_tone > 0.1 else ("red" if avg_tone < -0.1 else "gray")
                 st.markdown(
-                    f"- {tone} `{n['symbol']}` **[{n['title']}]({n['url']})**  \n"
-                    f"  <small>{n['source']} · {n['published']} · score {n['sentiment']:+.2f}</small>",
+                    f"<div style='color:#8b95ad;font-size:11px;font-weight:700;"
+                    f"letter-spacing:1.5px;text-transform:uppercase;margin:14px 0 6px 0;'>"
+                    f"📅 {date_val} · avg tone <span style='color:#{ {'green':'00d4aa','red':'ff5d5d','gray':'8b95ad'}[tone_color] }'>"
+                    f"{avg_tone:+.2f}</span> · {len(group)} headlines"
+                    f"</div>",
                     unsafe_allow_html=True,
                 )
+                for _, n in group.iterrows():
+                    tone = "🟢" if (n["sentiment"] or 0) > 0.05 else (
+                        "🔴" if (n["sentiment"] or 0) < -0.05 else "⚪"
+                    )
+                    st.markdown(
+                        f"- {tone} `{n['symbol']}` **[{n['title']}]({n['url']})**  \n"
+                        f"  <small>{n['source']} · score {n['sentiment']:+.2f}</small>",
+                        unsafe_allow_html=True,
+                    )
 
 with tab_tools:
     st.subheader("Tools")
@@ -1002,24 +1089,144 @@ with tab_watch:
         chart_studio.render(focus, key=f"watch_studio_{focus}", default_period="3M")
 
 with tab_sentiment:
-    st.subheader("Per-ticker sentiment (last 24h)")
-    df = q("""SELECT symbol, AVG(sentiment) AS avg_sentiment, COUNT(*) AS articles
-              FROM news
-              WHERE symbol IS NOT NULL AND sentiment IS NOT NULL
-                AND fetched_at >= datetime('now', '-1 day')
-              GROUP BY symbol ORDER BY ABS(AVG(sentiment)) DESC""")
-    if df.empty:
-        st.info("No scored news yet — refresh from the sidebar.")
+    sent_view = st.radio(
+        "View", ["Market sentiment", "Per-ticker sentiment"],
+        horizontal=True, label_visibility="collapsed", key="sent_view_pick",
+    )
+
+    # ===== MARKET SENTIMENT (Fear & Greed style composite) =====
+    if sent_view == "Market sentiment":
+        from dk.sentiment import market as market_sent
+
+        latest = q("""SELECT snapshot_ts, composite, label, components_json
+                      FROM market_sentiment ORDER BY snapshot_ts DESC LIMIT 1""")
+        if latest.empty:
+            st.info("Market sentiment hasn't been computed yet. Click **Refresh data** "
+                    "in the toolbar above (or click the button below).")
+            if st.button("Compute market sentiment now"):
+                with st.spinner("Computing market sentiment composite from VIX, bonds, breadth, news..."):
+                    market_sent.persist_snapshot()
+                st.rerun()
+        else:
+            row = latest.iloc[0]
+            comp = float(row["composite"])
+            label = row["label"]
+            ts = row["snapshot_ts"]
+            import json as _json
+            try:
+                components = _json.loads(row["components_json"] or "{}")
+            except Exception:
+                components = {}
+
+            # Big gauge card
+            color = (ui_style.BULL if comp >= 60 else
+                     ui_style.BEAR if comp <= 40 else ui_style.WARN)
+            st.markdown(
+                f"<div style='background:{ui_style.CARD};border:1px solid {ui_style.BORDER};"
+                f"border-radius:14px;padding:24px;text-align:center;margin-bottom:14px;'>"
+                f"<div style='color:{ui_style.TEXT_DIM};font-size:11px;font-weight:700;"
+                f"letter-spacing:1.6px;text-transform:uppercase;margin-bottom:8px;'>Market Mood</div>"
+                f"<div style='font-size:72px;font-weight:800;color:{color};line-height:1;'>{comp:.0f}</div>"
+                f"<div style='font-size:24px;color:{color};font-weight:700;margin-top:8px;'>{label}</div>"
+                f"<div style='color:{ui_style.TEXT_DIM};font-size:11px;margin-top:10px;'>"
+                f"0 = Extreme Fear · 50 = Neutral · 100 = Extreme Greed</div>"
+                f"<div style='color:{ui_style.TEXT_DIM};font-size:11px;margin-top:4px;'>"
+                f"as of {ts}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+            # Component breakdown
+            st.markdown("#### Composite components")
+            comp_rows = []
+            comp_labels = {
+                "vix": "VIX inverted (volatility)",
+                "safe_haven": "SPY vs TLT 20d (safe haven)",
+                "junk_demand": "HYG vs LQD 20d (risk appetite)",
+                "spy_momentum": "SPY vs 125d MA (momentum)",
+                "breadth_watchlist": "% watchlist above 50d SMA",
+                "news_breadth_24h": "% positive news (24h)",
+            }
+            for key, lbl in comp_labels.items():
+                v = components.get(key)
+                if v is None:
+                    comp_rows.append({"Indicator": lbl, "Score": "n/a", "_v": 50})
+                else:
+                    comp_rows.append({"Indicator": lbl, "Score": f"{v:.1f}", "_v": float(v)})
+            comp_df = pd.DataFrame(comp_rows)
+            st.dataframe(
+                comp_df[["Indicator", "_v", "Score"]].rename(columns={"_v": "level"}),
+                use_container_width=True, hide_index=True,
+                column_config={
+                    "level": st.column_config.ProgressColumn(
+                        "level", min_value=0, max_value=100, format="%.0f"),
+                },
+            )
+            st.caption("Each component is normalized 0–100 (0 = extreme fear, 100 = extreme greed) "
+                       "then averaged into the composite.")
+
+            # History chart
+            hist = q("""SELECT snapshot_ts, composite, label FROM market_sentiment
+                        ORDER BY snapshot_ts ASC""")
+            if len(hist) >= 2:
+                st.markdown("#### Market mood history")
+                import plotly.graph_objects as go
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=hist["snapshot_ts"], y=hist["composite"],
+                    mode="lines+markers", name="composite",
+                    line=ui_style.LINE_PRIMARY,
+                    fill="tozeroy", fillcolor="rgba(0,212,170,0.10)",
+                ))
+                # Zone lines
+                for level, txt, clr in [(80, "Extreme Greed", ui_style.BULL),
+                                          (20, "Extreme Fear", ui_style.BEAR)]:
+                    fig.add_hline(y=level, line=dict(color=clr, width=1, dash="dot"),
+                                  annotation_text=txt, annotation_position="right",
+                                  annotation_font_color=clr)
+                ui_style.style_fig(fig, height=320)
+                fig.update_yaxes(range=[0, 100])
+                st.plotly_chart(fig, use_container_width=True)
+
+            # Aggregate market news mood
+            st.markdown("#### Aggregate news tone (last 24h)")
+            agg = q("""SELECT
+                          ROUND(AVG(sentiment), 3) AS avg_sent,
+                          COUNT(*) AS articles,
+                          SUM(CASE WHEN sentiment > 0.05 THEN 1 ELSE 0 END) AS bull,
+                          SUM(CASE WHEN sentiment < -0.05 THEN 1 ELSE 0 END) AS bear
+                       FROM news WHERE sentiment IS NOT NULL
+                         AND fetched_at >= datetime('now', '-1 day')""")
+            if not agg.empty and agg.iloc[0]["articles"]:
+                a = agg.iloc[0]
+                ac1, ac2, ac3, ac4 = st.columns(4)
+                ac1.metric("Avg sentiment", f"{a['avg_sent']:+.3f}")
+                ac2.metric("Articles", f"{int(a['articles']):,}")
+                ac3.metric("Bullish", f"{int(a['bull']):,}",
+                            f"{a['bull']/a['articles']*100:.0f}%")
+                ac4.metric("Bearish", f"{int(a['bear']):,}",
+                            f"{a['bear']/a['articles']*100:.0f}%")
+
+    # ===== PER-TICKER SENTIMENT (original view) =====
     else:
-        df["tone"] = df["avg_sentiment"].apply(senti_label)
-        clickable_table(
-            df.round({"avg_sentiment": 3}),
-            key="sentiment_table",
-            column_config={
-                "avg_sentiment": st.column_config.NumberColumn("avg sentiment", format="%+.3f"),
-            },
-        )
-        st.caption(":bulb: Click any row to pop a chart preview.")
+        st.subheader("Per-ticker sentiment (last 24h)")
+        df = q("""SELECT symbol, AVG(sentiment) AS avg_sentiment, COUNT(*) AS articles
+                  FROM news
+                  WHERE symbol IS NOT NULL AND sentiment IS NOT NULL
+                    AND fetched_at >= datetime('now', '-1 day')
+                  GROUP BY symbol ORDER BY ABS(AVG(sentiment)) DESC""")
+        if df.empty:
+            st.info("No scored news yet — refresh from the toolbar.")
+        else:
+            df["tone"] = df["avg_sentiment"].apply(senti_label)
+            clickable_table(
+                df.round({"avg_sentiment": 3}),
+                key="sentiment_table",
+                column_config={
+                    "avg_sentiment": st.column_config.NumberColumn("avg sentiment", format="%+.3f"),
+                },
+            )
+            st.caption(":bulb: Click any row to pop a chart preview.")
 
 with tab_news:
     st.subheader("News feed")
