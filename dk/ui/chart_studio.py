@@ -11,6 +11,7 @@ Controls:
 """
 from __future__ import annotations
 import sqlite3
+from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -20,24 +21,50 @@ from dk.config import DB_PATH
 from dk.ui import style as ui_style
 
 
-# yfinance interval restrictions for periods. We expose only sensible combos.
-PERIOD_INTERVALS = {
-    "1d":  ["1m", "5m", "15m", "1h"],
-    "5d":  ["5m", "15m", "30m", "1h", "1d"],
-    "1mo": ["30m", "1h", "1d"],
-    "3mo": ["1h", "1d", "1wk"],
-    "6mo": ["1d", "1wk"],
-    "1y":  ["1d", "1wk"],
-    "2y":  ["1d", "1wk", "1mo"],
-    "5y":  ["1wk", "1mo"],
-    "max": ["1wk", "1mo"],
+# Unified user-facing timeframe selector. Each timeframe maps to a
+# (period/start, interval) combo tuned to give a clean, study-ready chart.
+# Order matters — drives the radio button row left-to-right.
+TIMEFRAMES = {
+    "1D":  {"mode": "period", "period": "1d",  "interval": "5m"},
+    "7D":  {"mode": "start",  "days": 7,       "interval": "1h"},
+    "30D": {"mode": "period", "period": "1mo", "interval": "1d"},
+    "3M":  {"mode": "period", "period": "3mo", "interval": "1d"},
+    "6M":  {"mode": "period", "period": "6mo", "interval": "1d"},
+    "1Y":  {"mode": "period", "period": "1y",  "interval": "1d"},
+    "3Y":  {"mode": "start",  "days": 365*3,   "interval": "1wk"},
+    "5Y":  {"mode": "period", "period": "5y",  "interval": "1wk"},
+    "10Y": {"mode": "period", "period": "10y", "interval": "1wk"},
 }
-DEFAULT_INTERVAL = {
-    "1d": "5m", "5d": "1h", "1mo": "1h", "3mo": "1d", "6mo": "1d",
-    "1y": "1d", "2y": "1d", "5y": "1wk", "max": "1mo",
-}
+TIMEFRAME_KEYS = list(TIMEFRAMES.keys())
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def _fetch_by_timeframe(symbol: str, timeframe: str) -> pd.DataFrame:
+    """Fetch OHLCV bars for `symbol` over the given user-facing timeframe label."""
+    import yfinance as yf
+    cfg = TIMEFRAMES.get(timeframe)
+    if not cfg:
+        return pd.DataFrame()
+    interval = cfg["interval"]
+    try:
+        t = yf.Ticker(symbol)
+        if cfg["mode"] == "period":
+            df = t.history(period=cfg["period"], interval=interval, auto_adjust=False)
+        else:  # start-date mode (for non-yfinance-native ranges like 7D / 3Y)
+            start = datetime.now() - timedelta(days=cfg["days"])
+            df = t.history(start=start, interval=interval, auto_adjust=False)
+        if df.empty:
+            return df
+        df = df.reset_index()
+        ts_col = "Datetime" if "Datetime" in df.columns else "Date"
+        df = df.rename(columns={ts_col: "ts"})
+        return df
+    except Exception as e:
+        print(f"[chart_studio] {symbol} {timeframe} ({interval}): {e}")
+        return pd.DataFrame()
+
+
+# Backward-compat shim — old callers used (period, interval)
 @st.cache_data(ttl=300, show_spinner=False)
 def _fetch(symbol: str, period: str, interval: str) -> pd.DataFrame:
     import yfinance as yf
@@ -46,7 +73,6 @@ def _fetch(symbol: str, period: str, interval: str) -> pd.DataFrame:
         if df.empty:
             return df
         df = df.reset_index()
-        # yfinance uses 'Date' for daily, 'Datetime' for intraday
         ts_col = "Datetime" if "Datetime" in df.columns else "Date"
         df = df.rename(columns={ts_col: "ts"})
         return df
@@ -158,11 +184,22 @@ def _delete_preset(preset_id: int) -> None:
         c.commit()
 
 
-def render(symbol: str, key: str = "cs", default_period: str = "3mo") -> None:
-    """Render the full chart studio for `symbol`."""
+def render(symbol: str, key: str = "cs", default_period: str = "3M") -> None:
+    """Render the full chart studio for `symbol`.
+
+    `default_period` accepts both new labels (1D/7D/30D/3M/6M/1Y/3Y/5Y/10Y)
+    and legacy yfinance strings (1d/5d/1mo/3mo/6mo/1y/5y/max) for back-compat.
+    """
     if not symbol:
         st.info("Pick a symbol to chart.")
         return
+
+    # Normalize legacy default_period values to new labels
+    _LEGACY_MAP = {"1d":"1D","5d":"7D","1mo":"30D","3mo":"3M","6mo":"6M",
+                   "1y":"1Y","2y":"3Y","5y":"5Y","max":"10Y","10y":"10Y"}
+    default_period = _LEGACY_MAP.get(default_period, default_period)
+    if default_period not in TIMEFRAME_KEYS:
+        default_period = "3M"
 
     # ---- Presets bar ----
     presets = _load_presets()
@@ -194,8 +231,8 @@ def render(symbol: str, key: str = "cs", default_period: str = "3mo") -> None:
         _save_preset(new_preset_name, symbol, cfg)
         st.toast(f"Preset '{new_preset_name}' saved", icon="✓")
 
-    # ---- Top control row 1: source / period / interval / style / POV ----
-    c1, c2, c3, c4, c5 = st.columns([1.1, 1.0, 1.0, 1.4, 1.6])
+    # ---- Top control row: source / style / POV ----
+    c1, c4, c5 = st.columns([1.1, 1.4, 1.6])
     source = c1.selectbox("Source", ["yfinance", "TradingView"], key=f"{key}_src")
 
     if source == "TradingView":
@@ -232,18 +269,6 @@ def render(symbol: str, key: str = "cs", default_period: str = "3mo") -> None:
             st.warning(f"TradingView widget could not load: {e}. Switch source to yfinance.")
         return
 
-    period = c2.selectbox(
-        "Period", list(PERIOD_INTERVALS.keys()),
-        index=list(PERIOD_INTERVALS.keys()).index(default_period),
-        key=f"{key}_period",
-    )
-    intervals = PERIOD_INTERVALS[period]
-    default_iv = DEFAULT_INTERVAL[period]
-    if default_iv not in intervals:
-        default_iv = intervals[0]
-    interval = c3.selectbox(
-        "Interval", intervals, index=intervals.index(default_iv), key=f"{key}_interval",
-    )
     style = c4.radio("Style", ["Candles", "OHLC", "Line", "Area"],
                      horizontal=True, label_visibility="collapsed", key=f"{key}_style")
     pov = c5.selectbox(
@@ -252,11 +277,25 @@ def render(symbol: str, key: str = "cs", default_period: str = "3mo") -> None:
         key=f"{key}_pov",
     )
 
+    # ---- Timeframe selector (all 9 timeframes as buttons) ----
+    timeframe = st.radio(
+        "Timeframe",
+        TIMEFRAME_KEYS,
+        index=TIMEFRAME_KEYS.index(default_period),
+        horizontal=True,
+        key=f"{key}_timeframe",
+    )
+    period = timeframe  # local alias for older code paths
+    interval = TIMEFRAMES[timeframe]["interval"]
+    st.caption(f":bar_chart: Showing **{timeframe}** at **{interval}** bar resolution")
+
     # ---- Overlay row ----
     o = st.columns(7)
-    show_sma20 = o[0].checkbox("SMA20", value=(period not in {"1d"}), key=f"{key}_s20")
-    show_sma50 = o[1].checkbox("SMA50", value=(period not in {"1d", "5d"}), key=f"{key}_s50")
-    show_sma200 = o[2].checkbox("SMA200", value=False, key=f"{key}_s200")
+    show_sma20 = o[0].checkbox("SMA20", value=(timeframe not in {"1D"}), key=f"{key}_s20")
+    show_sma50 = o[1].checkbox("SMA50", value=(timeframe not in {"1D", "7D"}), key=f"{key}_s50")
+    show_sma200 = o[2].checkbox("SMA200",
+                                 value=(timeframe in {"1Y", "3Y", "5Y", "10Y"}),
+                                 key=f"{key}_s200")
     show_ema = o[3].checkbox("EMA 12/26", value=False, key=f"{key}_ema")
     show_bb = o[4].checkbox("Bollinger", value=False, key=f"{key}_bb")
     show_vol = o[5].checkbox("Volume", value=True, key=f"{key}_vol")
@@ -264,11 +303,11 @@ def render(symbol: str, key: str = "cs", default_period: str = "3mo") -> None:
                                     index=0, label_visibility="collapsed", key=f"{key}_lower")
 
     # ---- Fetch ----
-    with st.spinner(f":satellite: Fetching {symbol} {period}/{interval} bars from yfinance..."):
-        df = _fetch(symbol, period, interval)
+    with st.spinner(f":satellite: Fetching {symbol} {timeframe} ({interval} bars) from yfinance..."):
+        df = _fetch_by_timeframe(symbol, timeframe)
     if df.empty:
-        st.warning(f"No data returned for {symbol} {period}/{interval}. "
-                   "Try a wider period or different interval.")
+        st.warning(f"No data returned for **{symbol}** at **{timeframe}**. "
+                   "Try a wider timeframe.")
         return
 
     closes = df["Close"].values.astype(float)
@@ -280,7 +319,7 @@ def render(symbol: str, key: str = "cs", default_period: str = "3mo") -> None:
 
     # ---- Relative-vs-SPY POV ----
     if pov == "Relative vs SPY":
-        spy = _fetch("SPY", period, interval)
+        spy = _fetch_by_timeframe("SPY", timeframe)
         if spy.empty:
             st.warning("Could not fetch SPY for relative comparison.")
             return

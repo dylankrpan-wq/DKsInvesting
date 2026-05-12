@@ -87,7 +87,7 @@ def show_chart_for(symbol: str) -> None:
     # ---- Chart studio (full controls inside the modal) ----
     if not eq.empty:
         from dk.ui import chart_studio
-        chart_studio.render(symbol, key=f"modal_{symbol}", default_period="3mo")
+        chart_studio.render(symbol, key=f"modal_{symbol}", default_period="3M")
     elif not cr.empty:
         import plotly.graph_objects as go
         cr_sorted = cr.sort_values("ts")

@@ -664,7 +664,7 @@ with tab_thesis:
         st.markdown(t.narrative)
         st.markdown("---")
         st.markdown("#### Chart studio")
-        chart_studio.render(th_sym, key=f"thesis_studio_{th_sym}", default_period="6mo")
+        chart_studio.render(th_sym, key=f"thesis_studio_{th_sym}", default_period="6M")
 
     # ---- Notes / journal ----
     st.markdown("---")
@@ -999,7 +999,7 @@ with tab_watch:
 
     if focus != "(all)":
         st.markdown(f"### {focus} — chart studio")
-        chart_studio.render(focus, key=f"watch_studio_{focus}", default_period="3mo")
+        chart_studio.render(focus, key=f"watch_studio_{focus}", default_period="3M")
 
 with tab_sentiment:
     st.subheader("Per-ticker sentiment (last 24h)")
