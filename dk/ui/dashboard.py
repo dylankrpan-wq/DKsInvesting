@@ -388,6 +388,42 @@ with tab_now:
         st.caption(":bulb: Type any of these into the **Thesis** tab for a full deep-dive, or the "
                    "**Charts** tab to chart it. Full ranked list is in the **Discover** tab.")
 
+    # ---- Technical signals firing now (live across watchlist) ----
+    from dk.indicators import signals as _sig
+    st.markdown("### 📐 Technical signals firing now")
+    st.caption("Live RSI, MACD crosses, golden/death crosses, Bollinger breakouts, 52-week breaks "
+               "and volume surges across your watchlist.")
+    _tech_rows = []
+    for _s in equity_syms:
+        try:
+            _summ = _sig.summarize(_s)
+        except Exception:
+            continue
+        for _g in _summ["signals"]:
+            _tech_rows.append({"symbol": _s, **_g})
+    if not _tech_rows:
+        st.caption("No fresh technical signals on the watchlist right now — markets quiet or need a data refresh.")
+    else:
+        _tech_rows.sort(key=lambda x: (x["strength"], x["lean"] == "bull"), reverse=True)
+        tcols = st.columns(2)
+        for i, _g in enumerate(_tech_rows[:14]):
+            border = (ui_style.BULL if _g["lean"] == "bull"
+                      else ui_style.BEAR if _g["lean"] == "bear" else ui_style.NEUTRAL)
+            icon = {"bull": "🟢", "bear": "🔴", "neutral": "⚪"}.get(_g["lean"], "")
+            stars = "★" * _g["strength"]
+            tcols[i % 2].markdown(
+                f"<div style='background:{ui_style.CARD};border:1px solid {ui_style.BORDER};"
+                f"border-left:4px solid {border};border-radius:9px;padding:9px 13px;margin:5px 0;'>"
+                f"<span style='font-weight:800;color:{ui_style.TEXT};font-size:15px;'>{icon} {_g['symbol']}</span> "
+                f"<span style='color:{border};font-size:11px;font-weight:600;'>{stars}</span>"
+                f"<div style='color:{ui_style.TEXT};font-size:12.5px;margin-top:3px;'>{_g['label']}</div>"
+                f"<div style='color:{ui_style.TEXT_DIM};font-size:11px;'>{_g['detail']}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        st.caption(":bulb: ★ = signal strength. Green = bullish lean, red = bearish. "
+                   "These also fire as `TECH_SIGNAL` alerts in the live feed below.")
+
     # ---- Watch-out risks ----
     risks = radar_mod.watchlist_risks(limit=4)
     if risks:

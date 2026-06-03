@@ -114,6 +114,33 @@ def scan() -> dict:
 
     scored.sort(key=lambda x: x["score"], reverse=True)
     top = scored[:TOP_N]
+
+    # Enrich the hottest names with technical signals (RSI/MACD/crosses/breakouts).
+    # Best-effort: needs price history, so we fetch it for just the top dozen.
+    try:
+        from dk.sources import prices_yfinance
+        from dk.indicators import signals as tech_signals
+        for r in top[:12]:
+            sym = r["symbol"]
+            try:
+                with sqlite3.connect(DB_PATH) as c2:
+                    have = c2.execute("SELECT COUNT(*) FROM prices WHERE symbol=?", (sym,)).fetchone()[0]
+                if have < 30:
+                    prices_yfinance.fetch_prices(sym)
+                summ = tech_signals.summarize(sym)
+                if summ["signals"]:
+                    top_sig = summ["signals"][0]
+                    r["notes"] = (r.get("notes", "") + " · 📐 " + top_sig["label"]).strip(" ·")
+                    # Boost heat when technicals CONFIRM the direction
+                    if summ["net_lean"] == r["score_direction"] and r["score_direction"] in ("bull", "bear"):
+                        confirm = summ["bull"] if r["score_direction"] == "bull" else summ["bear"]
+                        r["score"] = min(100.0, r["score"] + confirm * 1.5)
+            except Exception:
+                continue
+        top.sort(key=lambda x: x["score"], reverse=True)
+    except Exception as e:
+        print(f"[market_scan] tech enrichment skipped: {e}")
+
     # Persist (reuse candidates table; drop on_watchlist before upsert)
     rows = [{k: v for k, v in r.items() if k != "on_watchlist"} for r in top]
     store.upsert_candidates(rows)

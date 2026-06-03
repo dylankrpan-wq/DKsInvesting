@@ -28,6 +28,7 @@ KIND_META = {
     "MACRO_NEAR":       ("Macro", "🌐", "Macro event that can move the whole market."),
     "CRYPTO_MOVE":      ("Crypto Mover", "🪙", "Notable crypto move in the last 24h."),
     "CUSTOM":           ("Your Trigger", "🔔", "A custom alert you set has fired."),
+    "TECH_SIGNAL":      ("Technical", "📐", "A technical indicator just fired (RSI/MACD/cross/breakout)."),
 }
 
 # Base priority per kind (0-100). Boosted by ownership/watchlist/recency.
@@ -46,6 +47,7 @@ KIND_PRIORITY = {
     "EVENT_NEAR": 54,
     "MACRO_NEAR": 52,
     "CUSTOM": 70,
+    "TECH_SIGNAL": 68,
 }
 
 

@@ -198,6 +198,37 @@ def _check_news_velocity(c, cfg: dict) -> int:
     return n
 
 
+def _check_technical_signals(c, cfg: dict) -> int:
+    """Run the technical signal detector on watchlist names and emit TECH_SIGNAL
+    alerts for fresh events (RSI/MACD/crosses/breakouts). Deduped per symbol+code+day."""
+    from dk.indicators import signals
+    from dk.config import equity_symbols
+    today = date.today().isoformat()
+    icons = {"bull": "🟢", "bear": "🔴", "neutral": "⚪"}
+    n = 0
+    for sym in equity_symbols():
+        try:
+            sigs = signals.detect(sym)
+        except Exception:
+            continue
+        for s in sigs:
+            exists = c.execute(
+                "SELECT 1 FROM alerts WHERE symbol=? AND kind='TECH_SIGNAL' "
+                "AND substr(created_at,1,10)=? AND payload LIKE ? LIMIT 1",
+                (sym, today, f'%"code": "{s["code"]}"%'),
+            ).fetchone()
+            if exists:
+                continue
+            msg = f"{icons.get(s['lean'],'')} {sym}: {s['label']} — {s['detail']}"
+            c.execute(
+                "INSERT INTO alerts (symbol, kind, message, payload) VALUES (?, ?, ?, ?)",
+                (sym, "TECH_SIGNAL", msg,
+                 json.dumps({"code": s["code"], "lean": s["lean"], "strength": s["strength"]})),
+            )
+            n += 1
+    return n
+
+
 def _check_crypto(c, cfg: dict) -> int:
     move_pct = float(cfg.get("price_move_pct", 5.0))
     n = 0
@@ -227,6 +258,7 @@ def run() -> dict:
         counts["crypto"] = _check_crypto(c, cfg)
         counts["breaking_news"] = _check_breaking_news(c, cfg)
         counts["news_velocity"] = _check_news_velocity(c, cfg)
+        counts["tech_signals"] = _check_technical_signals(c, cfg)
         c.commit()
     counts["total_new"] = sum(counts.values())
     return counts
