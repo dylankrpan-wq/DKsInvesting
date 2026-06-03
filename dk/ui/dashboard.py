@@ -48,7 +48,9 @@ try:
 except st.errors.StreamlitAPIException:
     pass  # already set by entry point — fine
 
-ui_style.inject()
+if "_dk_theme" not in st.session_state:
+    st.session_state["_dk_theme"] = "dark"
+ui_style.inject(st.session_state["_dk_theme"])
 store.init_db()
 
 
@@ -170,7 +172,7 @@ equity_syms = [e["symbol"] for e in (wl.get("equities") or []) + (wl.get("etfs")
 senti_engine = (wl.get("sentiment") or {}).get("engine", "vader")
 
 st.markdown('<div class="dk-toolbar">', unsafe_allow_html=True)
-tb_col1, tb_col2, tb_col3, tb_col4, tb_col5 = st.columns([1.4, 1.2, 2.0, 1.4, 1.0])
+tb_col1, tb_col2, tb_col3, tb_col4, tb_col5 = st.columns([1.4, 1.2, 1.9, 1.3, 1.1])
 
 with tb_col1:
     refresh_clicked = st.button("⟳  Refresh data", type="primary", use_container_width=True)
@@ -191,13 +193,16 @@ with tb_col4:
     )
 
 with tb_col5:
-    st.markdown(
-        f"<div style='text-align:right; padding-top:6px;'>"
-        f"<span style='color:#8b95ad;font-size:11px;'>ENGINE</span> "
-        f"<code style='color:#00d4aa;'>{senti_engine}</code>"
-        f"</div>",
-        unsafe_allow_html=True,
+    _cur_theme = st.session_state.get("_dk_theme", "dark")
+    _theme_choice = st.radio(
+        "Theme", ["🌙 Dark", "☀️ Light"],
+        index=0 if _cur_theme == "dark" else 1,
+        horizontal=True, label_visibility="collapsed", key="_dk_theme_widget",
     )
+    _new_theme = "light" if "Light" in _theme_choice else "dark"
+    if _new_theme != _cur_theme:
+        st.session_state["_dk_theme"] = _new_theme
+        st.rerun()
 
 st.markdown('</div>', unsafe_allow_html=True)
 
@@ -2016,3 +2021,7 @@ with tab_crypto:
             key="crypto_table",
             column_config={"change_24h_pct": st.column_config.NumberColumn("24h chg", format="%+.2f%%")},
         )
+
+# ---- Trademark footer (signature configurable in config/watchlist.yaml -> branding.signature) ----
+_signature = (wl.get("branding") or {}).get("signature", "DK Investing™")
+ui_style.footer(_signature)

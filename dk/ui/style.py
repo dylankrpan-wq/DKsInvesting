@@ -1,20 +1,38 @@
-"""Custom CSS + Plotly theming for the DK Investing dashboard."""
+"""Custom CSS + Plotly theming for the DK Investing dashboard. Dark + light modes."""
 from __future__ import annotations
 import streamlit as st
 
-# Color palette
+# Accent colors — identical in both modes (mint/coral/azure read well on either).
 ACCENT = "#00d4aa"        # mint — primary accent / bull
 ACCENT_2 = "#4ea1ff"      # azure — secondary
 BULL = "#00d4aa"
 BEAR = "#ff5d5d"
 NEUTRAL = "#7c8aa8"
 WARN = "#ffb547"
+
+# Surface colors — MUTABLE; set_mode() swaps these between dark and light.
 BG = "#0b0f1a"
 CARD = "#151b2c"
 CARD_HOVER = "#1c2440"
 BORDER = "#2a3550"
 TEXT = "#e8ecf4"
 TEXT_DIM = "#8b95ad"
+
+_DARK = dict(BG="#0b0f1a", CARD="#151b2c", CARD_HOVER="#1c2440",
+             BORDER="#2a3550", TEXT="#e8ecf4", TEXT_DIM="#8b95ad")
+_LIGHT = dict(BG="#f4f6fb", CARD="#ffffff", CARD_HOVER="#eef2fa",
+              BORDER="#d9dfea", TEXT="#16203a", TEXT_DIM="#5d6b86")
+
+MODE = "dark"
+
+
+def set_mode(mode: str) -> None:
+    """Swap the surface palette globals so inline HTML cards adapt to the mode."""
+    global BG, CARD, CARD_HOVER, BORDER, TEXT, TEXT_DIM, MODE
+    p = _LIGHT if mode == "light" else _DARK
+    BG, CARD, CARD_HOVER = p["BG"], p["CARD"], p["CARD_HOVER"]
+    BORDER, TEXT, TEXT_DIM = p["BORDER"], p["TEXT"], p["TEXT_DIM"]
+    MODE = mode
 
 CSS = f"""
 <style>
@@ -255,8 +273,74 @@ hr {{ border-color: {BORDER}; opacity: 0.6; }}
 """
 
 
-def inject():
-    st.markdown(CSS, unsafe_allow_html=True)
+def _light_override() -> str:
+    """Additive CSS that flips the main surfaces to light mode."""
+    return f"""
+<style>
+.stApp {{
+    background:
+      radial-gradient(1100px 600px at 8% -10%, rgba(0,212,170,0.05), transparent 60%),
+      radial-gradient(900px 500px at 95% 0%, rgba(78,161,255,0.06), transparent 55%),
+      linear-gradient(180deg, {_LIGHT['BG']} 0%, #e9eef6 100%) !important;
+    color: {_LIGHT['TEXT']} !important;
+}}
+[data-testid="stSidebar"] {{
+    background: linear-gradient(180deg, #ffffff 0%, #eef2fa 100%) !important;
+    border-right: 1px solid {_LIGHT['BORDER']} !important;
+}}
+.dk-toolbar, .kpi, .dk-brand, .disc-chip {{
+    background: {_LIGHT['CARD']} !important;
+    border-color: {_LIGHT['BORDER']} !important;
+    box-shadow: 0 2px 10px rgba(20,30,60,0.06) !important;
+}}
+.kpi-value {{ color: {_LIGHT['TEXT']}; }}
+.dk-brand-title, h1, h2, h3, h4 {{ color: {_LIGHT['TEXT']} !important; }}
+.kpi-label, .kpi-sub, .dk-brand-sub, .dk-brand-clock, .sidebar-section-title {{
+    color: {_LIGHT['TEXT_DIM']} !important;
+}}
+.stTabs [aria-selected="true"] {{
+    background: {_LIGHT['CARD']} !important;
+    border-color: {_LIGHT['BORDER']} !important;
+    border-bottom-color: {_LIGHT['CARD']} !important;
+}}
+.stTabs [data-baseweb="tab"] {{ color: {_LIGHT['TEXT_DIM']}; }}
+.stButton > button {{ background: {_LIGHT['CARD']}; color: {_LIGHT['TEXT']};
+                      border-color: {_LIGHT['BORDER']}; }}
+[data-testid="stDataFrame"] {{ border-color: {_LIGHT['BORDER']}; }}
+[data-baseweb="select"] > div, [data-baseweb="input"] > div {{
+    background-color: {_LIGHT['CARD']} !important;
+    border-color: {_LIGHT['BORDER']} !important;
+}}
+hr {{ border-color: {_LIGHT['BORDER']}; }}
+/* DK footer */
+.dk-footer {{
+    margin-top: 38px; padding: 18px 0 8px 0;
+    border-top: 1px solid {_LIGHT['BORDER']};
+    text-align: center; color: {_LIGHT['TEXT_DIM']};
+}}
+</style>
+"""
+
+
+def inject(mode: str = "dark"):
+    set_mode(mode)
+    st.markdown(CSS, unsafe_allow_html=True)   # dark base always present
+    if mode == "light":
+        st.markdown(_light_override(), unsafe_allow_html=True)
+
+
+def footer(signature: str = "DK Investing™") -> None:
+    """Render the trademark footer signature at the bottom of the page."""
+    st.markdown(
+        f"<div class='dk-footer' style='margin-top:38px;padding:18px 0 8px 0;"
+        f"border-top:1px solid {BORDER};text-align:center;color:{TEXT_DIM};'>"
+        f"<div style='font-weight:700;letter-spacing:0.5px;color:{ACCENT};'>{signature}</div>"
+        f"<div style='font-size:11px;margin-top:4px;'>"
+        f"For research and educational purposes only — not investment advice. "
+        f"Data may be delayed.</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def loading_banner(text: str = "Loading fresh market data…",
@@ -307,8 +391,23 @@ LINE_MA50 = dict(color="#b66dff", width=1.4)
 LINE_MA200 = dict(color="#ffb547", width=1.4, dash="dash")
 
 
+def _live_plotly_layout() -> dict:
+    """Plotly layout built from CURRENT palette globals (mode-aware)."""
+    grid = "rgba(0,0,0,0.06)" if MODE == "light" else "rgba(255,255,255,0.05)"
+    zero = "rgba(0,0,0,0.12)" if MODE == "light" else "rgba(255,255,255,0.10)"
+    return dict(
+        paper_bgcolor=CARD, plot_bgcolor=CARD,
+        font=dict(color=TEXT, family="Inter, system-ui, sans-serif", size=12),
+        xaxis=dict(gridcolor=grid, zerolinecolor=zero, linecolor=BORDER, tickcolor=BORDER),
+        yaxis=dict(gridcolor=grid, zerolinecolor=zero, linecolor=BORDER, tickcolor=BORDER),
+        hoverlabel=dict(bgcolor=CARD, bordercolor=ACCENT, font=dict(color=TEXT)),
+        legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor=BORDER, borderwidth=1),
+        margin=dict(l=8, r=8, t=24, b=8),
+    )
+
+
 def style_fig(fig, height: int = 360):
-    fig.update_layout(**PLOTLY_LAYOUT, height=height,
+    fig.update_layout(**_live_plotly_layout(), height=height,
                       xaxis_rangeslider_visible=False)
     return fig
 

@@ -84,3 +84,7 @@ opportunity:
 
 notifications:
   discord_webhook_env: DISCORD_WEBHOOK_URL  # set in secrets.env to enable Discord alerts
+
+# Footer signature shown at the bottom of the dashboard. Change to your own.
+branding:
+  signature: "DK Investing™"
