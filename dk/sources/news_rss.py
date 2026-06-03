@@ -157,7 +157,15 @@ def fetch_crypto() -> int:
 
 
 def fetch_per_ticker(symbols: list[str]) -> int:
+    """Per-ticker Yahoo headlines, gated so only articles DIRECTLY about the
+    company/ticker are stored (drops vague market-roundup pieces)."""
+    from dk.config import load_watchlist
+    from dk.sources.relevance import filter_relevant
+    wl = load_watchlist()
+    names = {e["symbol"]: e.get("name", e["symbol"])
+             for e in (wl.get("equities") or []) + (wl.get("etfs") or [])}
     rows: list[dict] = []
     for s in symbols:
-        rows.extend(_parse(_yahoo_ticker_feed(s), f"Yahoo:{s}", "US", symbol=s))
+        fetched = _parse(_yahoo_ticker_feed(s), f"Yahoo:{s}", "US", symbol=s)
+        rows.extend(filter_relevant(s, names.get(s), fetched))
     return db.upsert_news(rows)
