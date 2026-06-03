@@ -26,6 +26,30 @@ def _job():
         print(f"  !! poll failed: {e}")
 
 
+_BG_SCHED = None
+
+
+def start_background_scheduler(run_now: bool = True):
+    """Start an in-process BackgroundScheduler exactly once per process.
+
+    Used when the dashboard and poller share a single host process (e.g. on
+    Railway). Safe to call repeatedly — subsequent calls are no-ops. Returns
+    the scheduler instance.
+    """
+    global _BG_SCHED
+    if _BG_SCHED is not None:
+        return _BG_SCHED
+    sched = BackgroundScheduler(timezone="UTC")
+    first_run = datetime.now() if run_now else None
+    sched.add_job(_job, IntervalTrigger(minutes=POLL_MINUTES),
+                  id="poll", next_run_time=first_run,
+                  max_instances=1, coalesce=True)
+    sched.start()
+    _BG_SCHED = sched
+    print(f"[scheduler] in-process scheduler started ({POLL_MINUTES} min interval)")
+    return sched
+
+
 def main():
     sched = BackgroundScheduler(timezone="UTC")
     sched.add_job(_job, IntervalTrigger(minutes=POLL_MINUTES), id="poll", next_run_time=datetime.now())

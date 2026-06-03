@@ -6,8 +6,11 @@ from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG_DIR = ROOT / "config"
-DATA_DIR = ROOT / "data"
-DATA_DIR.mkdir(exist_ok=True)
+
+# DATA_DIR is overridable via DK_DATA_DIR so a host (e.g. Railway) can point it
+# at a persistent volume mount like /data. Defaults to ./data for local use.
+DATA_DIR = Path(os.getenv("DK_DATA_DIR", str(ROOT / "data")))
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 load_dotenv(CONFIG_DIR / "secrets.env")
 

@@ -99,6 +99,24 @@ CREATE TABLE IF NOT EXISTS macro_context (
     fetched_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS market_sentiment (
+    snapshot_ts TEXT PRIMARY KEY,
+    composite REAL,
+    label TEXT,
+    components_json TEXT
+);
+
+CREATE TABLE IF NOT EXISTS theme_scores (
+    theme_id TEXT NOT NULL,
+    snapshot_ts TEXT NOT NULL,
+    aggregate_score REAL,
+    avg_sentiment REAL,
+    avg_price_chg_1d REAL,
+    constituent_count INTEGER,
+    top_contributor TEXT,
+    PRIMARY KEY (theme_id, snapshot_ts)
+);
+
 CREATE TABLE IF NOT EXISTS custom_alerts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     symbol TEXT NOT NULL,
@@ -218,16 +236,35 @@ CREATE TABLE IF NOT EXISTS crypto_prices (
 """
 
 
+_WAL_ENABLED = False
+
+
+def _enable_wal(c) -> None:
+    """WAL mode lets the dashboard READ while the scheduler thread WRITES,
+    without 'database is locked' errors. busy_timeout waits instead of erroring."""
+    global _WAL_ENABLED
+    try:
+        c.execute("PRAGMA journal_mode=WAL")
+        c.execute("PRAGMA busy_timeout=10000")  # wait up to 10s for a lock
+        c.execute("PRAGMA synchronous=NORMAL")
+        _WAL_ENABLED = True
+    except Exception as e:
+        print(f"[db] WAL setup skipped: {e}")
+
+
 def init_db() -> None:
-    Path(DB_PATH).parent.mkdir(exist_ok=True)
+    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
+        if not _WAL_ENABLED:
+            _enable_wal(conn)
         conn.executescript(SCHEMA)
 
 
 @contextmanager
 def conn():
     init_db()
-    c = sqlite3.connect(DB_PATH)
+    c = sqlite3.connect(DB_PATH, timeout=10)
+    c.execute("PRAGMA busy_timeout=10000")
     c.row_factory = sqlite3.Row
     try:
         yield c

@@ -52,9 +52,22 @@ ui_style.inject()
 store.init_db()
 
 
+# ---- In-process background scheduler (Railway / always-on hosts) ----
+# When DK_INPROCESS_SCHEDULER=1, run the 15-min poller inside this process so a
+# single Railway service powers both the dashboard AND auto-updates. Gated by
+# env var so local dev (separate scheduler window) and Streamlit Cloud don't
+# double-poll. @st.cache_resource guarantees it starts exactly once per process.
+import os as _os
+if _os.getenv("DK_INPROCESS_SCHEDULER") == "1":
+    @st.cache_resource
+    def _bg_scheduler():
+        from dk.jobs.scheduler import start_background_scheduler
+        return start_background_scheduler(run_now=True)
+    _bg_scheduler()
+
 
 def q(sql: str, params: tuple = ()) -> pd.DataFrame:
-    with sqlite3.connect(DB_PATH) as c:
+    with sqlite3.connect(DB_PATH, timeout=10) as c:
         return pd.read_sql_query(sql, c, params=params)
 
 
@@ -223,13 +236,126 @@ if mark_seen_clicked:
 # Click the « arrow at top-left of the page to expand. Click again to collapse to a thin tab.
 ui_glossary.render_sidebar_glossary()
 
-(tab_opps, tab_thesis, tab_themes, tab_charts, tab_discover, tab_tools,
+(tab_now, tab_opps, tab_thesis, tab_themes, tab_charts, tab_discover, tab_tools,
  tab_alerts, tab_watch, tab_portfolio, tab_sentiment, tab_news, tab_earnings,
  tab_calendar, tab_crypto) = st.tabs(
-    ["Opportunities", "Thesis", "Themes", "Charts", "Discover", "Tools",
+    ["📡 Now", "Opportunities", "Thesis", "Themes", "Charts", "Discover", "Tools",
      f"Alerts ({unseen})", "Watchlist", "Portfolio", "Sentiment", "News",
      "Earnings", "Calendar", "Crypto"]
 )
+
+with tab_now:
+    from dk.briefing import radar as radar_mod
+
+    st.subheader("📡 What matters now")
+    st.caption("Your live briefing — synthesized from news, price action, sentiment, power players, "
+               "and catalysts. Pointing out what's worth your attention, not telling you what to trade.")
+
+    # ---- Opportunity Spotlight: where positive signals are converging ----
+    spotlight = radar_mod.opportunity_spotlight(limit=5)
+    st.markdown("### ⭐ Opportunities lining up")
+    if not spotlight:
+        st.info("No strong setups detected yet. Click **Refresh data** to pull the latest, "
+                "then check back — this fills in as signals converge.")
+    else:
+        st.caption("Names where multiple positive signals are stacking up right now. "
+                   "The more reasons listed, the more is going for it.")
+        for s in spotlight:
+            owned_tag = " :green-background[OWNED]" if s["owned"] else ""
+            reasons_str = " · ".join(s["reasons"])
+            catalyst = ""
+            if s.get("catalyst_headline"):
+                cat_url = s.get("catalyst_url") or "#"
+                catalyst = (f"<div style='margin-top:6px;color:#8b95ad;font-size:12px;'>"
+                            f"📰 Why now: <a href='{cat_url}' target='_blank' "
+                            f"style='color:#4ea1ff;text-decoration:none;'>"
+                            f"{s['catalyst_headline'][:120]}</a></div>")
+            conv = s["conviction"]
+            bar_w = min(100, conv)
+            st.markdown(
+                f"<div style='background:{ui_style.CARD};border:1px solid {ui_style.BORDER};"
+                f"border-left:4px solid {ui_style.BULL};border-radius:10px;padding:14px 16px;margin:8px 0;'>"
+                f"<div style='display:flex;justify-content:space-between;align-items:center;'>"
+                f"<div style='font-size:18px;font-weight:800;color:{ui_style.TEXT};'>"
+                f"{s['symbol']}{owned_tag} "
+                f"<span style='font-size:12px;color:{ui_style.BULL};font-weight:600;'>"
+                f"#{s['rank']} · score {s['score']:.0f} · {s['direction']}</span></div>"
+                f"<div style='color:{ui_style.BULL};font-weight:700;font-size:13px;'>"
+                f"conviction {conv:.0f}</div></div>"
+                f"<div style='margin-top:6px;color:{ui_style.TEXT};font-size:13px;'>"
+                f"✅ {reasons_str}</div>"
+                f"{catalyst}"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        st.caption(":bulb: Open the **Thesis** tab on any of these for the full deep-dive, "
+                   "or click its row in **Opportunities** for a chart preview.")
+
+    # ---- Watch-out risks ----
+    risks = radar_mod.watchlist_risks(limit=4)
+    if risks:
+        st.markdown("### ⚠️ On your radar — caution")
+        st.caption("Names where negative signals are converging — so you're not blindsided.")
+        for r in risks:
+            owned_tag = " :red-background[OWNED]" if r["owned"] else ""
+            reasons_str = " · ".join(r["reasons"])
+            st.markdown(
+                f"<div style='background:{ui_style.CARD};border:1px solid {ui_style.BORDER};"
+                f"border-left:4px solid {ui_style.BEAR};border-radius:10px;padding:10px 14px;margin:6px 0;'>"
+                f"<span style='font-size:15px;font-weight:700;color:{ui_style.TEXT};'>{r['symbol']}{owned_tag}</span> "
+                f"<span style='color:{ui_style.BEAR};font-size:12px;'>⚠️ {reasons_str}</span>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+    # ---- The live briefing feed (prioritized signals) ----
+    st.markdown("---")
+    st.markdown("### 🔔 Live briefing — prioritized signals")
+    cards = radar_mod.build_radar(hours=48, limit=40)
+    if not cards:
+        st.info("No signals in the last 48 hours yet. Click **Refresh data** in the toolbar.")
+    else:
+        # Group into urgency tiers
+        hot = [c for c in cards if c["priority"] >= 85]
+        notable = [c for c in cards if 60 <= c["priority"] < 85]
+        fyi = [c for c in cards if c["priority"] < 60]
+
+        def _render_card(card):
+            owned_tag = " :green-background[OWNED]" if card["owned"] else (
+                " :blue-background[watchlist]" if card["watchlist"] else "")
+            link = (f" · <a href='{card['url']}' target='_blank' "
+                    f"style='color:#4ea1ff;text-decoration:none;'>open →</a>"
+                    if card.get("url") else "")
+            score_ctx = (f" · <span style='color:#8b95ad;'>{card['score_context']}</span>"
+                         if card.get("score_context") else "")
+            st.markdown(
+                f"<div style='background:{ui_style.CARD};border:1px solid {ui_style.BORDER};"
+                f"border-radius:8px;padding:9px 13px;margin:5px 0;'>"
+                f"<span style='font-size:15px;'>{card['icon']}</span> "
+                f"<span style='color:{ui_style.ACCENT};font-weight:700;font-size:11px;"
+                f"text-transform:uppercase;letter-spacing:0.5px;'>{card['category']}</span> "
+                f"<span style='color:#8b95ad;font-size:11px;'>· {card['ts']}</span>"
+                f"{owned_tag}"
+                f"<div style='color:{ui_style.TEXT};font-size:13px;margin-top:3px;font-weight:600;'>"
+                f"{card['headline']}</div>"
+                f"<div style='color:#8b95ad;font-size:12px;margin-top:2px;'>"
+                f"{card['why']}{score_ctx}{link}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+        if hot:
+            st.markdown("#### 🔥 Hot — needs attention")
+            for card in hot:
+                _render_card(card)
+        if notable:
+            st.markdown("#### 👀 Notable")
+            for card in notable:
+                _render_card(card)
+        if fyi:
+            with st.expander(f"📌 FYI — {len(fyi)} lower-priority signals", expanded=False):
+                for card in fyi:
+                    _render_card(card)
 
 with tab_themes:
     st.subheader("Theme packs")
