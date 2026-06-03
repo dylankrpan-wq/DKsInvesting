@@ -292,6 +292,29 @@ ui_glossary.render_sidebar_glossary()
 
 with tab_now:
     from dk.briefing import radar as radar_mod
+    from dk.briefing import health as health_mod
+
+    # ---- System status (diagnostic) ----
+    _h = health_mod.gather()
+    _label, _diag = health_mod.verdict(_h)
+    with st.expander(f"🩺 System status — {_label}", expanded=("🟢" not in _label)):
+        st.markdown(f"**{_label}** — {_diag}")
+        rc = _h.get("row_counts", {})
+        d1, d2, d3, d4 = st.columns(4)
+        d1.metric("Price rows", rc.get("prices", "—"))
+        d2.metric("News rows", rc.get("news", "—"))
+        d3.metric("Score snapshots", rc.get("score_history", "—"))
+        d4.metric("Alerts", rc.get("alerts", "—"))
+        d5, d6, d7, d8 = st.columns(4)
+        d5.metric("Scheduler", "running" if _h.get("scheduler_running") else "stopped")
+        d6.metric("Poll status", _h.get("poll_status", "—"))
+        d7.metric("DB writable", "yes" if _h.get("db_writable") else "NO")
+        d8.metric("Mkt sentiment", rc.get("market_sentiment", "—"))
+        st.caption(f"DB: `{_h.get('db_path')}` · last poll finished: {_h.get('poll_finished_at') or '—'}")
+        if _h.get("last_summary"):
+            st.markdown("**Last poll counts:**")
+            st.json(_h["last_summary"])
+        st.caption("Env: " + ", ".join(f"{k}={v}" for k, v in (_h.get('env') or {}).items()))
 
     st.subheader("📡 What matters now")
     st.caption("Your live briefing — synthesized from news, price action, sentiment, power players, "

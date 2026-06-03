@@ -3,8 +3,7 @@ import yfinance as yf
 from dk.store import db
 
 
-def fetch_prices(symbol: str, period: str = "3mo", interval: str = "1d") -> int:
-    """Fetch recent OHLCV bars and store. Returns rows written."""
+def _fetch_yfinance(symbol: str, period: str, interval: str) -> int:
     try:
         t = yf.Ticker(symbol)
         hist = t.history(period=period, interval=interval, auto_adjust=False)
@@ -23,6 +22,28 @@ def fetch_prices(symbol: str, period: str = "3mo", interval: str = "1d") -> int:
         return db.upsert_prices(symbol, rows)
     except Exception as e:
         print(f"[yfinance] {symbol}: {e}")
+        return 0
+
+
+def fetch_prices(symbol: str, period: str = "3mo", interval: str = "1d") -> int:
+    """Fetch recent OHLCV bars and store. Returns rows written.
+
+    Tries yfinance first; if it returns nothing (commonly because Yahoo blocks
+    or rate-limits datacenter IPs like Railway's), falls back to Stooq, which
+    serves a plain CSV that works from cloud hosts.
+    """
+    n = _fetch_yfinance(symbol, period, interval)
+    if n > 0:
+        return n
+    # Fallback — only daily bars from Stooq, which is fine for our 3mo history.
+    try:
+        from dk.sources import prices_stooq
+        n2 = prices_stooq.fetch_prices(symbol)
+        if n2 > 0:
+            print(f"[prices] {symbol}: yfinance empty, Stooq fallback wrote {n2} bars")
+        return n2
+    except Exception as e:
+        print(f"[prices] {symbol}: Stooq fallback failed: {e}")
         return 0
 
 
