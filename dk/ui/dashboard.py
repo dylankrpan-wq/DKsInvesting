@@ -272,13 +272,99 @@ if mark_seen_clicked:
 # Click the « arrow at top-left of the page to expand. Click again to collapse to a thin tab.
 ui_glossary.render_sidebar_glossary()
 
-(tab_now, tab_opps, tab_thesis, tab_themes, tab_charts, tab_discover, tab_tools,
- tab_alerts, tab_watch, tab_portfolio, tab_sentiment, tab_news, tab_earnings,
- tab_calendar, tab_crypto) = st.tabs(
-    ["📡 Now", "Opportunities", "Thesis", "Themes", "Charts", "Discover", "Tools",
-     f"Alerts ({unseen})", "Watchlist", "Portfolio", "Sentiment", "News",
+(tab_now, tab_markets, tab_opps, tab_thesis, tab_themes, tab_charts, tab_discover,
+ tab_tools, tab_alerts, tab_watch, tab_portfolio, tab_sentiment, tab_news,
+ tab_earnings, tab_calendar, tab_crypto) = st.tabs(
+    ["📡 Now", "🏆 Markets", "Opportunities", "Thesis", "Themes", "Charts", "Discover",
+     "Tools", f"Alerts ({unseen})", "Watchlist", "Portfolio", "Sentiment", "News",
      "Earnings", "Calendar", "Crypto"]
 )
+
+with tab_markets:
+    from dk.sources import leaderboards as _lb
+
+    @st.cache_data(ttl=900, show_spinner=False)
+    def _lb_crypto():
+        return _lb.top_crypto(25)
+
+    @st.cache_data(ttl=900, show_spinner=False)
+    def _lb_stocks():
+        return _lb.top_stocks(25)
+
+    @st.cache_data(ttl=900, show_spinner=False)
+    def _lb_etfs():
+        return _lb.top_etfs()
+
+    @st.cache_data(ttl=900, show_spinner=False)
+    def _lb_dividend():
+        return _lb.top_dividend()
+
+    st.subheader("🏆 Markets — top 25 leaderboards")
+    st.caption("One-stop board: the biggest/most-active names across stocks, ETFs, dividend payers "
+               "and crypto. Live data, cached ~15 min. Click into Thesis/Charts for any name.")
+
+    board = st.radio("Board", ["📈 Stocks", "📊 ETFs", "💰 Dividend", "🪙 Crypto"],
+                     horizontal=True, label_visibility="collapsed", key="lb_board")
+
+    if st.button("↻ Refresh leaderboards", key="lb_refresh"):
+        st.cache_data.clear()
+        st.rerun()
+
+    def _pct_col(label="chg %"):
+        return st.column_config.NumberColumn(label, format="%+.2f%%")
+
+    if board == "📈 Stocks":
+        st.markdown("#### Top 25 most-active stocks")
+        rows = _lb_stocks()
+        if not rows:
+            st.info("Couldn't load stocks right now — try Refresh.")
+        else:
+            df = pd.DataFrame(rows)
+            df["mcap_B"] = (df["market_cap"] / 1e9).round(1)
+            view = df[["symbol", "name", "price", "change_pct", "mcap_B", "pe", "volume"]]
+            clickable_table(view, key="lb_stocks_tbl", column_config={
+                "price": st.column_config.NumberColumn("price", format="$%.2f"),
+                "change_pct": _pct_col(), "mcap_B": st.column_config.NumberColumn("mkt cap ($B)", format="%.1f"),
+                "pe": st.column_config.NumberColumn("P/E", format="%.1f"),
+            })
+            st.caption(":bulb: Click any row for a chart preview.")
+
+    elif board == "📊 ETFs":
+        st.markdown("#### Top 25 ETFs by assets")
+        rows = _lb_etfs()
+        df = pd.DataFrame(rows)
+        view = df[["symbol", "name", "price", "change_pct"]]
+        clickable_table(view, key="lb_etf_tbl", column_config={
+            "price": st.column_config.NumberColumn("price", format="$%.2f"),
+            "change_pct": _pct_col(),
+        })
+        st.caption(":bulb: Click any row for a chart preview.")
+
+    elif board == "💰 Dividend":
+        st.markdown("#### Top 25 dividend stocks (by yield)")
+        rows = _lb_dividend()
+        df = pd.DataFrame(rows)
+        view = df[["symbol", "name", "price", "change_pct", "yield_pct", "div"]]
+        clickable_table(view, key="lb_div_tbl", column_config={
+            "price": st.column_config.NumberColumn("price", format="$%.2f"),
+            "change_pct": _pct_col(),
+            "yield_pct": st.column_config.NumberColumn("yield", format="%.2f%%"),
+            "div": st.column_config.NumberColumn("annual div", format="$%.2f"),
+        })
+        st.caption("Yield computed live from price and annual dividend. Click any row for a chart preview.")
+
+    else:  # Crypto
+        st.markdown("#### Top 25 crypto by market cap")
+        rows = _lb_crypto()
+        df = pd.DataFrame(rows)
+        df["mcap_B"] = (df["market_cap"] / 1e9).round(2)
+        view = df[["rank", "symbol", "name", "price", "change_24h", "change_7d", "mcap_B"]]
+        st.dataframe(view, use_container_width=True, hide_index=True, column_config={
+            "rank": st.column_config.NumberColumn("#", format="%d"),
+            "price": st.column_config.NumberColumn("price", format="$%.4f"),
+            "change_24h": _pct_col("24h"), "change_7d": _pct_col("7d"),
+            "mcap_B": st.column_config.NumberColumn("mkt cap ($B)", format="%.2f"),
+        })
 
 with tab_now:
     from dk.briefing import radar as radar_mod
@@ -1679,54 +1765,254 @@ with tab_news:
             )
 
 with tab_earnings:
-    st.subheader("Upcoming earnings")
-    df = q("""SELECT symbol, report_date, eps_estimate, revenue_estimate
+    st.subheader("📅 Earnings center")
+
+    def _fmt_money(v):
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            return "—"
+        if v != v:
+            return "—"
+        sign = "-" if v < 0 else ""
+        a = abs(v)
+        if a >= 1e9:
+            return f"{sign}${a/1e9:.2f}B"
+        if a >= 1e6:
+            return f"{sign}${a/1e6:.1f}M"
+        return f"{sign}${a:,.0f}"
+
+    def _fmt_eps(v):
+        try:
+            return f"${float(v):.2f}"
+        except (TypeError, ValueError):
+            return "—"
+
+    # ---- Upcoming earnings ----
+    st.markdown("#### Upcoming reports")
+    up = q("""SELECT symbol, report_date, eps_estimate, revenue_estimate
               FROM earnings WHERE report_date >= date('now')
               ORDER BY report_date ASC LIMIT 100""")
-    if df.empty:
-        st.info("No earnings rows yet.")
+    if up.empty:
+        st.info("No upcoming earnings on file. Add `FINNHUB_KEY` for the full market calendar; "
+                "watchlist dates come from yfinance.")
     else:
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        up = up.copy()
+        up["days_out"] = (pd.to_datetime(up["report_date"], errors="coerce")
+                          - pd.Timestamp.now().normalize()).dt.days
+        up["EPS est"] = up["eps_estimate"].apply(_fmt_eps)
+        up["Revenue est"] = up["revenue_estimate"].apply(_fmt_money)
+        view = up[["symbol", "report_date", "days_out", "EPS est", "Revenue est"]]
+        clickable_table(view, key="earn_upcoming", column_config={
+            "days_out": st.column_config.NumberColumn("days out", format="%d"),
+        })
+        st.caption(":bulb: Click a row for a chart preview. EPS/revenue are consensus estimates.")
+
+    # ---- Recently reported (with surprises) ----
+    st.markdown("#### Recently reported — beats & misses")
+    rep = q("""SELECT symbol, report_date, eps_estimate, eps_actual,
+                      revenue_estimate, revenue_actual
+               FROM earnings
+               WHERE eps_actual IS NOT NULL AND report_date >= date('now', '-45 days')
+               ORDER BY report_date DESC LIMIT 50""")
+    if rep.empty:
+        st.caption("No reported results captured yet (needs `FINNHUB_KEY` for actuals).")
+    else:
+        rep = rep.copy()
+
+        def _eps_surprise(r):
+            try:
+                est, act = float(r["eps_estimate"]), float(r["eps_actual"])
+                if est == 0:
+                    return None
+                return (act - est) / abs(est) * 100
+            except (TypeError, ValueError):
+                return None
+
+        rep["EPS est"] = rep["eps_estimate"].apply(_fmt_eps)
+        rep["EPS act"] = rep["eps_actual"].apply(_fmt_eps)
+        rep["surprise"] = rep.apply(_eps_surprise, axis=1)
+        rep["Rev est"] = rep["revenue_estimate"].apply(_fmt_money)
+        rep["Rev act"] = rep["revenue_actual"].apply(_fmt_money)
+        rep["result"] = rep["surprise"].apply(
+            lambda s: "🟢 beat" if (s or 0) > 1 else ("🔴 miss" if (s or 0) < -1 else "≈ inline")
+            if s is not None else "—")
+        view = rep[["symbol", "report_date", "result", "EPS est", "EPS act",
+                    "surprise", "Rev est", "Rev act"]]
+        st.dataframe(view, use_container_width=True, hide_index=True, column_config={
+            "surprise": st.column_config.NumberColumn("EPS surprise", format="%+.1f%%"),
+        })
+
+    # ---- Earnings-related news ----
+    st.markdown("#### Earnings news & expectations")
+    enews = q("""SELECT published, fetched_at, source, title, url, symbol, sentiment
+                 FROM news
+                 WHERE (lower(title) LIKE '%earnings%' OR lower(title) LIKE '%revenue%'
+                        OR lower(title) LIKE '%guidance%' OR lower(title) LIKE '%beats%'
+                        OR lower(title) LIKE '%misses%' OR lower(title) LIKE '%quarterly%'
+                        OR lower(title) LIKE '%eps%' OR lower(title) LIKE '%forecast%')
+                 ORDER BY fetched_at DESC LIMIT 25""")
+    if enews.empty:
+        st.caption("No earnings-related headlines captured yet — refresh data.")
+    else:
+        for _, row in enews.iterrows():
+            tone = senti_label(row["sentiment"]) if row["sentiment"] is not None else "·"
+            color = "green" if tone == "+" else ("red" if tone == "-" else "gray")
+            tag = f"`{row['symbol']}`" if row["symbol"] else ""
+            st.markdown(
+                f"- :{color}[**{tone}**] {tag} **[{row['title']}]({row['url']})**  \n"
+                f"  <small>{row['source']} · {row['fetched_at']}</small>",
+                unsafe_allow_html=True,
+            )
 
 with tab_calendar:
-    st.subheader("Macro events")
-    macro = q("""SELECT event_date, category, title, importance, region
-                 FROM macro_events
-                 WHERE event_date >= date('now')
-                 ORDER BY event_date ASC LIMIT 60""")
-    if macro.empty:
-        st.info("No macro events loaded yet — refresh.")
-    else:
-        st.dataframe(
-            macro, use_container_width=True, hide_index=True,
-            column_config={"importance": st.column_config.ProgressColumn(
-                "imp", min_value=0, max_value=3, format="%d")},
-        )
+    import calendar as _calmod
+    from datetime import date as _date
+
+    st.subheader("🗓️ Market calendar")
+
+    # Month navigation
+    nav1, nav2, nav3, nav4 = st.columns([1, 1, 1, 4])
+    if nav1.button("◀ Prev", key="cal_prev"):
+        st.session_state["_cal_offset"] = st.session_state.get("_cal_offset", 0) - 1
+    if nav2.button("Today", key="cal_today"):
+        st.session_state["_cal_offset"] = 0
+    if nav3.button("Next ▶", key="cal_next"):
+        st.session_state["_cal_offset"] = st.session_state.get("_cal_offset", 0) + 1
+
+    _offset = st.session_state.get("_cal_offset", 0)
+    _today = _date.today()
+    _mi = _today.month - 1 + _offset
+    _year = _today.year + _mi // 12
+    _month = _mi % 12 + 1
+    nav4.markdown(f"### {_calmod.month_name[_month]} {_year}")
+
+    # Gather events for this month
+    _mstart = _date(_year, _month, 1)
+    _last_day = _calmod.monthrange(_year, _month)[1]
+    _mend = _date(_year, _month, _last_day)
+    events_by_day: dict[str, list[dict]] = {}
+
+    def _add_ev(dstr, label, color):
+        events_by_day.setdefault(dstr, []).append({"label": label, "color": color})
+
+    # Earnings
+    _earn = q("""SELECT symbol, report_date FROM earnings
+                 WHERE report_date BETWEEN ? AND ?""",
+              (_mstart.isoformat(), _mend.isoformat()))
+    for _, r in _earn.iterrows():
+        _add_ev(str(r["report_date"])[:10], f"📊 {r['symbol']}", ui_style.ACCENT_2)
+    # Macro events
+    _mac = q("""SELECT event_date, title, importance FROM macro_events
+                WHERE event_date BETWEEN ? AND ?""",
+             (_mstart.isoformat(), _mend.isoformat()))
+    for _, r in _mac.iterrows():
+        col = ui_style.WARN if (r["importance"] or 0) >= 2 else ui_style.NEUTRAL
+        _add_ev(str(r["event_date"])[:10], f"🌐 {str(r['title'])[:22]}", col)
+    # Curated events
+    try:
+        from dk.sources import events_calendar as _ec
+        for ev in _ec.load_events():
+            ed = str(ev.get("date"))
+            if _mstart.isoformat() <= ed <= _mend.isoformat():
+                _add_ev(ed, f"📣 {str(ev.get('title'))[:22]}", ui_style.BULL)
+    except Exception:
+        pass
+
+    # Build the grid (Sunday-first)
+    _calmod.setfirstweekday(_calmod.SUNDAY)
+    weeks = _calmod.monthcalendar(_year, _month)
+    dow = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    html = ["<table style='width:100%;border-collapse:collapse;table-layout:fixed;'>"]
+    html.append("<tr>" + "".join(
+        f"<th style='padding:6px;color:{ui_style.TEXT_DIM};font-size:11px;"
+        f"text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid {ui_style.BORDER};'>{d}</th>"
+        for d in dow) + "</tr>")
+    for week in weeks:
+        html.append("<tr>")
+        for day in week:
+            if day == 0:
+                html.append(f"<td style='background:#0a0e16;border:1px solid {ui_style.BORDER};height:96px;'></td>")
+                continue
+            dstr = _date(_year, _month, day).isoformat()
+            is_today = (dstr == _today.isoformat())
+            evs = events_by_day.get(dstr, [])
+            chips = "".join(
+                f"<div style='background:{e['color']}22;color:{e['color']};border-radius:4px;"
+                f"padding:1px 4px;margin:1px 0;font-size:10px;white-space:nowrap;overflow:hidden;"
+                f"text-overflow:ellipsis;'>{e['label']}</div>"
+                for e in evs[:4])
+            more = (f"<div style='color:{ui_style.TEXT_DIM};font-size:9px;'>+{len(evs)-4} more</div>"
+                    if len(evs) > 4 else "")
+            daynum_color = ui_style.ACCENT if is_today else ui_style.TEXT
+            border = (f"2px solid {ui_style.ACCENT}" if is_today else f"1px solid {ui_style.BORDER}")
+            html.append(
+                f"<td style='background:{ui_style.CARD};border:{border};height:96px;"
+                f"vertical-align:top;padding:4px;'>"
+                f"<div style='color:{daynum_color};font-weight:700;font-size:12px;'>{day}</div>"
+                f"{chips}{more}</td>")
+        html.append("</tr>")
+    html.append("</table>")
+    st.markdown("".join(html), unsafe_allow_html=True)
+    st.caption("📊 earnings · 🌐 macro event · 📣 known event. Use Prev/Next to change month.")
+
+    # IPOs below the grid
     st.markdown("---")
     st.subheader("Upcoming IPOs")
     ipos = q("""SELECT expected_date, symbol, name, price_range, exchange, source
-                FROM ipos
-                WHERE expected_date >= date('now', '-30 days')
+                FROM ipos WHERE expected_date >= date('now', '-30 days')
                 ORDER BY expected_date DESC LIMIT 100""")
     if ipos.empty:
-        st.info("No IPO data yet. Add a `FINNHUB_KEY` in `config/secrets.env` "
-                "for the Finnhub IPO calendar; SEC S-1 filings come in via RSS regardless.")
+        st.info("No IPO data yet. Add a `FINNHUB_KEY` for the Finnhub IPO calendar; "
+                "SEC S-1 filings come in via RSS regardless.")
     else:
         st.dataframe(ipos, use_container_width=True, hide_index=True)
 
 with tab_crypto:
-    st.subheader("Crypto snapshot")
+    st.subheader("🪙 Crypto — top 25 by market cap")
+    from dk.sources import leaderboards as _lbc
+
+    @st.cache_data(ttl=600, show_spinner=False)
+    def _top25_crypto():
+        return _lbc.top_crypto(25)
+
+    if st.button("↻ Refresh crypto", key="crypto_refresh"):
+        st.cache_data.clear()
+        st.rerun()
+
+    rows = _top25_crypto()
+    if not rows:
+        st.info("Couldn't load crypto right now — click Refresh, or check back shortly.")
+    else:
+        cdf = pd.DataFrame(rows)
+        cdf["mcap_B"] = (cdf["market_cap"] / 1e9).round(2)
+        cdf["vol_B"] = (cdf["volume"] / 1e9).round(2)
+        view = cdf[["rank", "symbol", "name", "price", "change_24h", "change_7d", "mcap_B", "vol_B"]]
+        st.dataframe(
+            view, use_container_width=True, hide_index=True, column_config={
+                "rank": st.column_config.NumberColumn("#", format="%d"),
+                "price": st.column_config.NumberColumn("price", format="$%.4f"),
+                "change_24h": st.column_config.NumberColumn("24h", format="%+.2f%%"),
+                "change_7d": st.column_config.NumberColumn("7d", format="%+.2f%%"),
+                "mcap_B": st.column_config.NumberColumn("mkt cap ($B)", format="%.2f"),
+                "vol_B": st.column_config.NumberColumn("24h vol ($B)", format="%.2f"),
+            },
+        )
+        st.caption("Live top 25 from CoinGecko, cached ~10 min.")
+
+    # Watchlist crypto (from poller) below the top 25
+    st.markdown("---")
+    st.markdown("#### Your watchlist crypto")
     df = q("""SELECT cp.symbol, cp.ts, cp.price_usd, cp.change_24h_pct, cp.vol_24h, cp.market_cap
               FROM crypto_prices cp
               INNER JOIN (SELECT symbol, MAX(ts) m FROM crypto_prices GROUP BY symbol) lat
                 ON cp.symbol=lat.symbol AND cp.ts=lat.m
               ORDER BY cp.symbol""")
     if df.empty:
-        st.info("No crypto data yet.")
+        st.caption("No watchlist crypto data yet — refresh data.")
     else:
         clickable_table(
             df.round({"price_usd": 2, "change_24h_pct": 2}),
             key="crypto_table",
             column_config={"change_24h_pct": st.column_config.NumberColumn("24h chg", format="%+.2f%%")},
         )
-        st.caption(":bulb: Click any row to pop a chart preview.")
