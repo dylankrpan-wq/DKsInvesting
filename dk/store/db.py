@@ -99,6 +99,14 @@ CREATE TABLE IF NOT EXISTS macro_context (
     fetched_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS poll_status (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    status TEXT,
+    started_at TEXT,
+    finished_at TEXT,
+    summary_json TEXT
+);
+
 CREATE TABLE IF NOT EXISTS market_sentiment (
     snapshot_ts TEXT PRIMARY KEY,
     composite REAL,
@@ -252,12 +260,65 @@ def _enable_wal(c) -> None:
         print(f"[db] WAL setup skipped: {e}")
 
 
+def set_poll_running() -> None:
+    with conn() as c:
+        c.execute(
+            """INSERT INTO poll_status (id, status, started_at, finished_at)
+               VALUES (1, 'running', CURRENT_TIMESTAMP, NULL)
+               ON CONFLICT(id) DO UPDATE SET
+                 status='running', started_at=CURRENT_TIMESTAMP, finished_at=NULL"""
+        )
+
+
+def set_poll_done(summary: dict | None = None) -> None:
+    import json as _json
+    with conn() as c:
+        c.execute(
+            """INSERT INTO poll_status (id, status, started_at, finished_at, summary_json)
+               VALUES (1, 'idle', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)
+               ON CONFLICT(id) DO UPDATE SET
+                 status='idle', finished_at=CURRENT_TIMESTAMP, summary_json=excluded.summary_json""",
+            (_json.dumps(summary or {}),),
+        )
+
+
+def get_poll_status() -> dict:
+    try:
+        with conn() as c:
+            row = c.execute(
+                "SELECT status, started_at, finished_at, summary_json FROM poll_status WHERE id=1"
+            ).fetchone()
+    except Exception:
+        return {"status": "idle"}
+    if not row:
+        return {"status": "idle"}
+    return {"status": row[0], "started_at": row[1],
+            "finished_at": row[2], "summary_json": row[3]}
+
+
+# Column migrations for DBs created before a column existed. Each runs before
+# the schema/index creation so indexes referencing new columns don't fail.
+# Safe to run repeatedly — failures (column exists / table absent) are ignored.
+_MIGRATIONS = [
+    "ALTER TABLE news ADD COLUMN is_breaking INTEGER DEFAULT 0",
+]
+
+
+def _migrate(conn) -> None:
+    for stmt in _MIGRATIONS:
+        try:
+            conn.execute(stmt)
+        except Exception:
+            pass  # column already exists, or the table doesn't exist yet
+
+
 def init_db() -> None:
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
         if not _WAL_ENABLED:
             _enable_wal(conn)
-        conn.executescript(SCHEMA)
+        _migrate(conn)          # add missing columns first
+        conn.executescript(SCHEMA)  # then tables + indexes (incl. is_breaking index)
 
 
 @contextmanager

@@ -218,12 +218,60 @@ hr {{ border-color: {BORDER}; opacity: 0.6; }}
     background-color: {CARD} !important;
     border-color: {BORDER} !important;
 }}
+
+/* ---------- Loading indicator ---------- */
+@keyframes dk-spin {{ to {{ transform: rotate(360deg); }} }}
+@keyframes dk-pulse {{ 0%,100% {{ opacity: 0.55; }} 50% {{ opacity: 1; }} }}
+@keyframes dk-shimmer {{ 0% {{ background-position: -400px 0; }} 100% {{ background-position: 400px 0; }} }}
+
+.dk-loader {{
+    display: flex; align-items: center; gap: 16px;
+    background: linear-gradient(135deg, rgba(0,212,170,0.12), rgba(78,161,255,0.08));
+    border: 1px solid {ACCENT};
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin: 6px 0 16px 0;
+    animation: dk-pulse 1.6s ease-in-out infinite;
+    box-shadow: 0 4px 24px rgba(0,212,170,0.18);
+}}
+.dk-spinner {{
+    width: 30px; height: 30px; flex: 0 0 30px;
+    border-radius: 50%;
+    border: 3px solid rgba(0,212,170,0.2);
+    border-top-color: {ACCENT};
+    border-right-color: {ACCENT_2};
+    animation: dk-spin 0.8s linear infinite;
+}}
+.dk-loader-text {{ color: {TEXT}; font-weight: 700; font-size: 15px; }}
+.dk-loader-sub {{ color: {TEXT_DIM}; font-size: 12px; margin-top: 2px; }}
+
+.dk-shimmer-bar {{
+    height: 6px; border-radius: 3px; margin-top: 10px;
+    background: linear-gradient(90deg, {CARD} 0%, {ACCENT} 50%, {CARD} 100%);
+    background-size: 400px 100%;
+    animation: dk-shimmer 1.2s linear infinite;
+}}
 </style>
 """
 
 
 def inject():
     st.markdown(CSS, unsafe_allow_html=True)
+
+
+def loading_banner(text: str = "Loading fresh market data…",
+                   sub: str = "Pulling prices, news, sentiment, themes and alerts. This takes ~30–45 seconds.") -> str:
+    """Animated loading indicator (spinner + pulsing card + shimmer bar)."""
+    return (
+        '<div class="dk-loader">'
+        '  <div class="dk-spinner"></div>'
+        '  <div style="flex:1;">'
+        f'    <div class="dk-loader-text">{text}</div>'
+        f'    <div class="dk-loader-sub">{sub}</div>'
+        '    <div class="dk-shimmer-bar"></div>'
+        '  </div>'
+        '</div>'
+    )
 
 
 # ---------- Plotly theme ----------

@@ -20,6 +20,19 @@ from dk.notify import discord as discord_notifier
 
 
 def run_once() -> dict:
+    """Public entry: wraps the poll with status tracking so the UI can show a
+    live loading indicator and detect completion."""
+    store.init_db()
+    store.set_poll_running()
+    summary: dict = {}
+    try:
+        summary = _run_once_impl()
+        return summary
+    finally:
+        store.set_poll_done(summary)
+
+
+def _run_once_impl() -> dict:
     store.init_db()
     summary: dict[str, int] = {}
     syms = equity_symbols()

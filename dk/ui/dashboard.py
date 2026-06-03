@@ -230,12 +230,41 @@ if refresh_clicked:
         st.toast("Refresh complete!", icon="✅")
         st.rerun()
 
-# Banner while a background refresh is in flight
-if st.session_state.get("_dk_bg_refresh_started"):
-    st.info("🔄 A background data refresh is running — switch tabs or wait ~30-45s, then the "
-            "newest data shows automatically. (On this hosted version, data also auto-refreshes "
-            "every 15 minutes on its own.)")
-    st.session_state.pop("_dk_bg_refresh_started", None)
+# ---- Live loading indicator (self-updating fragment) ----
+# Shows an animated spinner whenever a poll is running (manual trigger, the
+# 15-min auto-poll, or the startup poll) and auto-repaints the whole app the
+# moment it finishes. Re-checks every 3s WITHOUT blanking the page.
+@st.fragment(run_every=3)
+def _poll_indicator():
+    from datetime import datetime, timezone
+    status = store.get_poll_status()
+    cur = status.get("status", "idle")
+    prev = st.session_state.get("_dk_prev_poll_status", "idle")
+
+    running = cur == "running"
+    # Staleness guard: if 'running' but started >4 min ago, treat as done (crash safety)
+    if running and status.get("started_at"):
+        try:
+            started = datetime.fromisoformat(status["started_at"].replace("Z", "+00:00"))
+            if started.tzinfo is None:
+                started = started.replace(tzinfo=timezone.utc)
+            if (datetime.now(timezone.utc) - started).total_seconds() > 240:
+                running = False
+        except Exception:
+            pass
+
+    if running:
+        st.markdown(ui_style.loading_banner(), unsafe_allow_html=True)
+        st.session_state["_dk_prev_poll_status"] = "running"
+    else:
+        if prev == "running":
+            # Poll just finished — repaint the whole app with fresh data, once.
+            st.session_state["_dk_prev_poll_status"] = "idle"
+            st.toast("✅ Data updated — briefing refreshed!", icon="✅")
+            st.rerun(scope="app")
+        st.session_state["_dk_prev_poll_status"] = "idle"
+
+_poll_indicator()
 
 # Show the last run summary (after a refresh completes)
 _last_summary = st.session_state.get("_dk_last_summary")
