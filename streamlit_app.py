@@ -1,21 +1,26 @@
-"""Streamlit Cloud entrypoint.
+"""Streamlit Cloud / Railway entry point.
 
-Strategy: set page config + render a visible breadcrumb FIRST, then attempt
-to import the dashboard. If anything goes wrong, the breadcrumb persists and
-the full traceback renders in the page so we can see what broke.
+IMPORTANT: Streamlit re-runs this file top-to-bottom on EVERY interaction. If we
+used `import dk.ui.dashboard`, Python would cache the module and the dashboard
+body would execute only ONCE (first load) — every rerun after that would render
+a blank page. That was the recurring "goes dark and blank" bug on hosted setups.
+
+Instead we read + exec the dashboard source fresh on every run, exactly as if
+Streamlit were running dashboard.py directly as the main script (which is how it
+behaves locally and why local never blanked).
 """
 from pathlib import Path
 import sys
 import traceback
 
-# Bootstrap project root onto sys.path BEFORE any dk.* imports
 _ROOT = Path(__file__).resolve().parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-# Streamlit must be the very first thing we touch so set_page_config works
 import streamlit as st
 
+# Page config must be the first Streamlit call. dashboard.py also calls it,
+# wrapped in try/except, so the duplicate is harmless.
 st.set_page_config(
     page_title="DK Investing",
     layout="wide",
@@ -23,22 +28,14 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# Visible breadcrumb so we always see SOMETHING even if dashboard import fails
-_status = st.empty()
-_status.info("Loading DK Investing dashboard...")
+_DASH = _ROOT / "dk" / "ui" / "dashboard.py"
 
 try:
-    import dk.ui.dashboard  # noqa: F401
-    _status.empty()
+    _code = compile(_DASH.read_text(encoding="utf-8"), str(_DASH), "exec")
+    # run_name "__main__" + correct __file__ so dashboard.py's path bootstrap works
+    exec(_code, {"__name__": "__main__", "__file__": str(_DASH)})
 except Exception as e:
-    _status.empty()
     st.error(f"Dashboard failed to load: **{type(e).__name__}** — {e}")
     st.code(traceback.format_exc(), language="python")
-    st.markdown(
-        "### What to do\n"
-        "Copy the traceback above and paste it back to Claude — they'll patch the issue.\n\n"
-        "Most common causes on Streamlit Cloud:\n"
-        "- A Python package is missing from `requirements.txt`\n"
-        "- A Python 3.14 compatibility issue with one of the dependencies\n"
-        "- Read/write permission to `data/dk.db` (Cloud's filesystem is partly read-only)\n"
-    )
+    st.info("Copy this traceback to Claude to patch it. The page won't go blank — "
+            "this error box renders even when the dashboard body fails.")
