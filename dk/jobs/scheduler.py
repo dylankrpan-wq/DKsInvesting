@@ -50,6 +50,38 @@ def start_background_scheduler(run_now: bool = True):
     return sched
 
 
+def trigger_now() -> bool:
+    """Ask the running in-process scheduler to run the poll job immediately,
+    in its background thread (non-blocking). Returns True if triggered."""
+    global _BG_SCHED
+    if _BG_SCHED is None:
+        return False
+    job = _BG_SCHED.get_job("poll")
+    if not job:
+        return False
+    try:
+        job.modify(next_run_time=datetime.now())
+        return True
+    except Exception as e:
+        print(f"[scheduler] trigger_now failed: {e}")
+        return False
+
+
+def is_running() -> bool:
+    return _BG_SCHED is not None
+
+
+def last_poll_info() -> dict:
+    """Best-effort: when is the next scheduled poll?"""
+    global _BG_SCHED
+    if _BG_SCHED is None:
+        return {}
+    job = _BG_SCHED.get_job("poll")
+    if not job or not job.next_run_time:
+        return {}
+    return {"next_run": job.next_run_time.isoformat()}
+
+
 def main():
     sched = BackgroundScheduler(timezone="UTC")
     sched.add_job(_job, IntervalTrigger(minutes=POLL_MINUTES), id="poll", next_run_time=datetime.now())

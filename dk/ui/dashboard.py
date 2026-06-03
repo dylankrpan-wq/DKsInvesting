@@ -203,22 +203,39 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 # Handle toolbar actions
 if refresh_clicked:
-    # Simple, reliable spinner pattern. Runs the full poll in one call.
-    # The spinner shows a circular loading icon with descriptive text the
-    # ENTIRE time the fetch runs. After it completes, rerun to repaint.
-    with st.spinner("🔄 Refreshing DK data — pulling prices, news, sentiment, themes, "
-                    "trending, brokers, alerts. Takes ~30-45 seconds. The page will "
-                    "freeze briefly while this runs, then redraw with fresh data."):
-        try:
-            summary = poller.run_once()
-            st.session_state["_dk_last_summary"] = summary
-        except Exception as e:
-            import traceback
-            st.error(f"Refresh failed: **{type(e).__name__}** — {e}")
-            st.code(traceback.format_exc(), language="python")
-            st.stop()
-    st.toast("Refresh complete!", icon="✅")
-    st.rerun()
+    import os as _os_rf
+    if _os_rf.getenv("DK_INPROCESS_SCHEDULER") == "1":
+        # On always-on hosts the background scheduler does the heavy lifting.
+        # Trigger it to run NOW in its background thread — non-blocking, so the
+        # page never freezes / drops the websocket. Data appears within ~30-45s.
+        from dk.jobs.scheduler import trigger_now
+        if trigger_now():
+            st.session_state["_dk_bg_refresh_started"] = True
+            st.toast("🔄 Background refresh started — new data in ~30-45s. Page stays live.", icon="🔄")
+        else:
+            st.toast("Scheduler still warming up — try again in a few seconds.", icon="⏳")
+        st.rerun()
+    else:
+        # Local / no-scheduler: run the blocking poll with a spinner.
+        with st.spinner("🔄 Refreshing DK data — pulling prices, news, sentiment, themes, "
+                        "trending, brokers, alerts (~30-45s)..."):
+            try:
+                summary = poller.run_once()
+                st.session_state["_dk_last_summary"] = summary
+            except Exception as e:
+                import traceback
+                st.error(f"Refresh failed: **{type(e).__name__}** — {e}")
+                st.code(traceback.format_exc(), language="python")
+                st.stop()
+        st.toast("Refresh complete!", icon="✅")
+        st.rerun()
+
+# Banner while a background refresh is in flight
+if st.session_state.get("_dk_bg_refresh_started"):
+    st.info("🔄 A background data refresh is running — switch tabs or wait ~30-45s, then the "
+            "newest data shows automatically. (On this hosted version, data also auto-refreshes "
+            "every 15 minutes on its own.)")
+    st.session_state.pop("_dk_bg_refresh_started", None)
 
 # Show the last run summary (after a refresh completes)
 _last_summary = st.session_state.get("_dk_last_summary")
