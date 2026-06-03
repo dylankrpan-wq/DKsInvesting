@@ -132,6 +132,29 @@ def _check_macro(c, cfg: dict) -> int:
     return n
 
 
+def _check_breaking_news(c, cfg: dict) -> int:
+    """Surface high-impact breaking news as alerts. Dedupes per article (id)."""
+    n = 0
+    rows = c.execute(
+        """SELECT id, symbol, source, title, url, sentiment, fetched_at
+           FROM news
+           WHERE is_breaking = 1
+             AND fetched_at >= datetime('now', '-2 hours')
+             AND id NOT IN (SELECT COALESCE(json_extract(payload, '$.news_id'), '')
+                            FROM alerts WHERE kind = 'HIGH_IMPACT_NEWS')"""
+    ).fetchall()
+    for nid, sym, source, title, url, sentiment, fetched in rows:
+        msg = f"{(sym or '?')}: {title[:140]}"
+        c.execute(
+            "INSERT INTO alerts (symbol, kind, message, payload) VALUES (?, ?, ?, ?)",
+            (sym or "?", "HIGH_IMPACT_NEWS", msg,
+             json.dumps({"news_id": nid, "source": source, "url": url,
+                          "sentiment": sentiment, "fetched_at": fetched})),
+        )
+        n += 1
+    return n
+
+
 def _check_crypto(c, cfg: dict) -> int:
     move_pct = float(cfg.get("price_move_pct", 5.0))
     n = 0
@@ -159,6 +182,7 @@ def run() -> dict:
         counts["sentiment"] = _check_sentiment_surge(c, cfg)
         counts["macro"] = _check_macro(c, cfg)
         counts["crypto"] = _check_crypto(c, cfg)
+        counts["breaking_news"] = _check_breaking_news(c, cfg)
         c.commit()
     counts["total_new"] = sum(counts.values())
     return counts

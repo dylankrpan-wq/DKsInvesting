@@ -1229,29 +1229,115 @@ with tab_sentiment:
             st.caption(":bulb: Click any row to pop a chart preview.")
 
 with tab_news:
-    st.subheader("News feed")
+    # ===== Top metrics: source count, last fetch, breaking count =====
+    src_count_df = q("SELECT COUNT(DISTINCT source) AS n FROM news")
+    last_fetch_df = q("SELECT MAX(fetched_at) AS last FROM news")
+    breaking_count_df = q("""SELECT COUNT(*) AS n FROM news
+                              WHERE is_breaking=1
+                                AND fetched_at >= datetime('now', '-24 hours')""")
+
+    nc1, nc2, nc3, nc4 = st.columns(4)
+    nc1.metric("Sources covered", int(src_count_df.iloc[0]["n"] or 0))
+    nc2.metric("Last fetch", str(last_fetch_df.iloc[0]["last"] or "—")[:16])
+    nc3.metric("⚡ Breaking (24h)", int(breaking_count_df.iloc[0]["n"] or 0))
+    art_24h = q("SELECT COUNT(*) AS n FROM news WHERE fetched_at >= datetime('now', '-24 hours')")
+    nc4.metric("Articles (24h)", int(art_24h.iloc[0]["n"] or 0))
+
+    # ===== Breaking news panel =====
+    st.markdown("---")
+    st.markdown("### ⚡ Breaking news (high-impact, last 24h)")
+    st.caption("Auto-flagged from keywords: M&A, FDA approvals, guidance changes, contract wins, "
+               "bankruptcies, executive changes, regulatory actions, ETF approvals, exploits, etc.")
+    breaking = q("""SELECT published, fetched_at, source, region, title, url, symbol, sentiment
+                    FROM news WHERE is_breaking=1
+                      AND fetched_at >= datetime('now', '-24 hours')
+                    ORDER BY fetched_at DESC LIMIT 30""")
+    if breaking.empty:
+        st.info("No breaking news flagged in the last 24h.")
+    else:
+        for _, row in breaking.iterrows():
+            tag = f"`{row['symbol']}`" if row['symbol'] else f"_{row['region'] or 'GLOBAL'}_"
+            tone = senti_label(row["sentiment"]) if row["sentiment"] is not None else "·"
+            color = "green" if tone == "+" else ("red" if tone == "-" else "gray")
+            sentiment_str = f"score {row['sentiment']:+.2f}" if row["sentiment"] is not None else ""
+            st.markdown(
+                f"<div style='background:rgba(255,181,71,0.06);border-left:3px solid #ffb547;"
+                f"padding:10px 14px;margin:6px 0;border-radius:6px;'>"
+                f"<span style='color:#ffb547;font-weight:700;font-size:11px;'>⚡ BREAKING</span> "
+                f"<span style='color:#{ {'green':'00d4aa','red':'ff5d5d','gray':'8b95ad'}[color] }'>"
+                f"{tone}</span> {tag} "
+                f"<a href='{row['url']}' style='color:#e8ecf4;text-decoration:none;font-weight:600;' target='_blank'>"
+                f"{row['title']}</a>"
+                f"<div style='color:#8b95ad;font-size:11px;margin-top:3px;'>"
+                f"{row['source']} · {row['fetched_at']} · {sentiment_str}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+    # ===== Filters + full feed =====
+    st.markdown("---")
+    st.markdown("### Full news feed")
+
+    # Source filter + sentiment filter
+    src_list_df = q("SELECT DISTINCT source FROM news ORDER BY source")
+    all_sources = src_list_df["source"].dropna().tolist() if not src_list_df.empty else []
+    fcol1, fcol2, fcol3 = st.columns([2, 1, 1])
+    selected_sources = fcol1.multiselect(
+        "Filter by source", all_sources,
+        placeholder="All sources" if all_sources else "No sources yet",
+        key="news_src_filter",
+    )
+    sentiment_filter = fcol2.selectbox(
+        "Sentiment", ["Any", "Positive", "Negative", "Neutral"], key="news_sent_filter")
+    breaking_only = fcol3.checkbox("⚡ Breaking only", key="news_breaking_only")
+
+    # Build query
     placeholders = ",".join("?" * len(selected_regions)) if selected_regions else "''"
+    where_clauses = []
+    params = []
+
     if focus != "(all)":
-        df = q(f"""SELECT published, source, region, title, url, symbol, sentiment
-                   FROM news WHERE symbol = ?
-                   ORDER BY published DESC LIMIT 200""", (focus,))
+        where_clauses.append("symbol = ?")
+        params.append(focus)
     else:
-        df = q(f"""SELECT published, source, region, title, url, symbol, sentiment
-                   FROM news WHERE region IN ({placeholders}) OR symbol IS NOT NULL
-                   ORDER BY published DESC LIMIT 200""", tuple(selected_regions))
+        where_clauses.append(f"(region IN ({placeholders}) OR symbol IS NOT NULL)")
+        params.extend(selected_regions)
+
+    if selected_sources:
+        src_placeholders = ",".join("?" * len(selected_sources))
+        where_clauses.append(f"source IN ({src_placeholders})")
+        params.extend(selected_sources)
+
+    if sentiment_filter == "Positive":
+        where_clauses.append("sentiment > 0.05")
+    elif sentiment_filter == "Negative":
+        where_clauses.append("sentiment < -0.05")
+    elif sentiment_filter == "Neutral":
+        where_clauses.append("(sentiment BETWEEN -0.05 AND 0.05 OR sentiment IS NULL)")
+
+    if breaking_only:
+        where_clauses.append("is_breaking = 1")
+
+    where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+    sql = f"""SELECT published, fetched_at, source, region, title, url, symbol, sentiment, is_breaking
+              FROM news WHERE {where_sql}
+              ORDER BY fetched_at DESC LIMIT 200"""
+
+    df = q(sql, tuple(params))
     if df.empty:
-        st.info("No news yet — refresh from the sidebar.")
+        st.info("No matching news. Try widening filters or click **Refresh data**.")
     else:
+        st.caption(f":bulb: Showing {len(df)} articles. Use filters above to narrow.")
         for _, row in df.iterrows():
             tag = f"`{row['symbol']}`" if row['symbol'] else f"_{row['region'] or 'GLOBAL'}_"
-            tone = senti_label(row["sentiment"])
+            tone = senti_label(row["sentiment"]) if row["sentiment"] is not None else "·"
             color = "green" if tone == "+" else ("red" if tone == "-" else "gray")
+            breaking_badge = " :orange-background[⚡ BREAKING]" if row.get("is_breaking") else ""
+            sentiment_str = (f" · score {row['sentiment']:+.2f}"
+                              if row["sentiment"] is not None else "")
             st.markdown(
-                f"- :{color}[**{tone}**] {tag} **[{row['title']}]({row['url']})**  \n"
-                f"  <small>{row['source']} · {row['published']} · score {row['sentiment']:.2f}</small>"
-                if row["sentiment"] is not None else
-                f"- {tag} **[{row['title']}]({row['url']})**  \n"
-                f"  <small>{row['source']} · {row['published']}</small>",
+                f"- :{color}[**{tone}**] {tag}{breaking_badge} **[{row['title']}]({row['url']})**  \n"
+                f"  <small>{row['source']} · {row['fetched_at']}{sentiment_str}</small>",
                 unsafe_allow_html=True,
             )
 

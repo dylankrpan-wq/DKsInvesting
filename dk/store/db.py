@@ -22,10 +22,12 @@ CREATE TABLE IF NOT EXISTS news (
     url TEXT,
     published TEXT,
     fetched_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    sentiment REAL
+    sentiment REAL,
+    is_breaking INTEGER DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_news_symbol_published ON news(symbol, published DESC);
 CREATE INDEX IF NOT EXISTS idx_news_published ON news(published DESC);
+CREATE INDEX IF NOT EXISTS idx_news_breaking ON news(is_breaking, fetched_at DESC);
 
 CREATE TABLE IF NOT EXISTS earnings (
     symbol TEXT NOT NULL,
@@ -237,12 +239,18 @@ def conn():
 def upsert_news(rows: list[dict]) -> int:
     if not rows:
         return 0
+    # Best-effort migration: add is_breaking column if it doesn't exist (for users
+    # whose DB was created before this column was added).
     with conn() as c:
+        try:
+            c.execute("ALTER TABLE news ADD COLUMN is_breaking INTEGER DEFAULT 0")
+        except Exception:
+            pass
         c.executemany(
             """INSERT OR IGNORE INTO news
-               (id, symbol, region, source, title, summary, url, published)
-               VALUES (:id, :symbol, :region, :source, :title, :summary, :url, :published)""",
-            rows,
+               (id, symbol, region, source, title, summary, url, published, is_breaking)
+               VALUES (:id, :symbol, :region, :source, :title, :summary, :url, :published, :is_breaking)""",
+            [{**r, "is_breaking": r.get("is_breaking", 0)} for r in rows],
         )
         return c.total_changes
 

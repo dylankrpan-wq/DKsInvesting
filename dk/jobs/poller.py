@@ -46,8 +46,11 @@ def run_once() -> dict:
     # Earnings calendar via Finnhub (if key set)
     summary["earnings_finnhub"] = earnings_finnhub.fetch_calendar(days_ahead=30)
 
-    # Global news
+    # Global news (now 23 free RSS feeds incl. wires + Fed + SEC + Treasury)
     summary["news_global"] = news_rss.fetch_global()
+
+    # Crypto-specific news (CoinDesk, The Block, Decrypt, CoinTelegraph)
+    summary["news_crypto"] = news_rss.fetch_crypto()
 
     # Per-ticker news (Yahoo RSS — free)
     summary["news_per_ticker"] = news_rss.fetch_per_ticker(syms)
