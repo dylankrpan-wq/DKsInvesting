@@ -7,10 +7,38 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG_DIR = ROOT / "config"
 
-# DATA_DIR is overridable via DK_DATA_DIR so a host (e.g. Railway) can point it
-# at a persistent volume mount like /data. Defaults to ./data for local use.
-DATA_DIR = Path(os.getenv("DK_DATA_DIR", str(ROOT / "data")))
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+def _resolve_data_dir() -> Path:
+    """Pick the first WRITABLE data dir. Tries DK_DATA_DIR (e.g. a Railway volume
+    at /data), then ./data, then a temp dir. Never crashes at import if the
+    configured path isn't mounted/writable — it just falls back."""
+    import tempfile
+    candidates = []
+    env_dir = os.getenv("DK_DATA_DIR")
+    if env_dir:
+        candidates.append(Path(env_dir))
+    candidates.append(ROOT / "data")
+    candidates.append(Path(tempfile.gettempdir()) / "dk_data")
+    for cand in candidates:
+        try:
+            cand.mkdir(parents=True, exist_ok=True)
+            probe = cand / ".write_probe"
+            probe.write_text("ok")
+            probe.unlink()
+            return cand
+        except Exception as e:
+            print(f"[config] data dir {cand} not usable ({e}); trying next")
+            continue
+    # Absolute last resort — return ./data even if probing failed
+    fallback = ROOT / "data"
+    try:
+        fallback.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    return fallback
+
+
+DATA_DIR = _resolve_data_dir()
 
 load_dotenv(CONFIG_DIR / "secrets.env")
 
