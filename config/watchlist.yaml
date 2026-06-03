@@ -88,3 +88,17 @@ notifications:
 # Footer signature shown at the bottom of the dashboard. Change to your own.
 branding:
   signature: "DK Investing™"
+
+# SMS phone alerts — which alert kinds count as "live events" worth a text,
+# and how many to include per digest text. Credentials live in secrets.env.
+sms:
+  max_items_per_text: 5
+  live_kinds:
+    - HIGH_IMPACT_NEWS
+    - NEWS_VELOCITY
+    - PERSON_ACTIVITY
+    - EVENT_NEAR
+    - MACRO_NEAR
+    - EARNINGS_NEAR
+    - RANK_JUMP
+    - NEW_TOP

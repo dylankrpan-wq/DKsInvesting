@@ -211,6 +211,14 @@ def _run_once_impl() -> dict:
     # Push to Discord if webhook configured (no-op otherwise)
     summary["discord_pushed"] = discord_notifier.push_unsent()
 
+    # Push live-event digest SMS to phone (no-op unless configured)
+    from dk.notify import sms as sms_notifier
+    try:
+        summary["sms"] = sms_notifier.push_digest()
+    except Exception as e:
+        print(f"[sms] {e}")
+        summary["sms"] = {"error": str(e)}
+
     print(f"[poller] done: {summary}")
     return summary
 

@@ -756,9 +756,41 @@ with tab_themes:
 with tab_tools:
     st.subheader("Tools")
     tools_choice = st.radio(
-        "Tool", ["Heatmap", "Compare tickers", "Position sizing", "Custom alerts"],
+        "Tool", ["Heatmap", "Compare tickers", "Position sizing", "Custom alerts", "📱 Phone alerts"],
         horizontal=True, label_visibility="collapsed", key="tools_choice",
     )
+
+    if tools_choice == "📱 Phone alerts":
+        from dk.notify import sms as _sms
+        st.markdown("#### 📱 Phone alerts for live events")
+        configured = _sms.is_configured()
+        st.markdown(
+            f"**Status:** {'🟢 Configured' if configured else '🔴 Not configured'}"
+        )
+        st.caption("You'll get ONE concise text per 15-min cycle summarizing the top live events "
+                   "(breaking news, conference/keynote spikes, power-player moves, rank jumps, "
+                   "imminent earnings/macro) — never one-text-per-alert spam.")
+        with st.expander("How to set it up", expanded=not configured):
+            st.markdown("""
+**Option A — Twilio (recommended, true SMS):**
+1. Make a free account at [twilio.com](https://twilio.com), get a trial number
+2. Add to Railway → Variables (or `config/secrets.env` locally):
+   - `SMS_TO_NUMBER` = your phone, e.g. `+13055551234`
+   - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` (your Twilio number)
+
+**Option B — free email-to-SMS gateway (carrier-dependent):**
+- `SMS_TO_NUMBER`, `SMS_CARRIER` (verizon/att/tmobile/…), and SMTP creds
+  (`SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_USER`, `SMTP_PASS`=Gmail app password)
+
+Tune which alert kinds count as "live events" in `config/watchlist.yaml` → `sms:`.
+""")
+        if st.button("Send test text", type="primary", disabled=not configured, key="sms_test"):
+            with st.spinner("Sending test SMS..."):
+                ok = _sms.send_test()
+            if ok:
+                st.success("Sent! Check your phone.")
+            else:
+                st.error("Send failed — double-check your credentials in secrets/Variables.")
 
     # ===== HEATMAP =====
     if tools_choice == "Heatmap":

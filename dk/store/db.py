@@ -47,7 +47,8 @@ CREATE TABLE IF NOT EXISTS alerts (
     message TEXT,
     payload TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    seen INTEGER DEFAULT 0
+    seen INTEGER DEFAULT 0,
+    sms_sent INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS notes (
@@ -301,6 +302,7 @@ def get_poll_status() -> dict:
 # Safe to run repeatedly — failures (column exists / table absent) are ignored.
 _MIGRATIONS = [
     "ALTER TABLE news ADD COLUMN is_breaking INTEGER DEFAULT 0",
+    "ALTER TABLE alerts ADD COLUMN sms_sent INTEGER DEFAULT 0",
 ]
 
 
