@@ -1,0 +1,38 @@
+# DK Investing — curated calendar of high-impact known events.
+# These get surfaced as alerts day-of and day-before regardless of headline volume.
+# Edit freely. Date format: YYYY-MM-DD.
+#
+# Source columns:
+#   symbol      — the ticker to associate the event with (optional)
+#   title       — short description
+#   category    — Tech / Macro / Earnings / Crypto / Energy / etc.
+#   date        — event date
+#   importance  — 1 (low) | 2 (medium) | 3 (high). >=2 triggers alerts.
+
+events:
+  # ---- Big tech keynotes & product events ----
+  - { symbol: NVDA, title: "Jensen Huang keynote (GTC)",       category: Tech, date: 2026-03-17, importance: 3 }
+  - { symbol: NVDA, title: "Jensen Huang keynote (Computex)",  category: Tech, date: 2026-05-19, importance: 3 }
+  - { symbol: AAPL, title: "Apple WWDC keynote",                category: Tech, date: 2026-06-08, importance: 3 }
+  - { symbol: AAPL, title: "iPhone fall event",                 category: Tech, date: 2026-09-09, importance: 3 }
+  - { symbol: GOOGL, title: "Google I/O keynote",               category: Tech, date: 2026-05-13, importance: 3 }
+  - { symbol: MSFT, title: "Microsoft Build conference",        category: Tech, date: 2026-05-19, importance: 3 }
+  - { symbol: META, title: "Meta Connect (Quest event)",        category: Tech, date: 2026-09-23, importance: 3 }
+  - { symbol: AMD,  title: "AMD AI / Advancing AI event",       category: Tech, date: 2026-06-12, importance: 3 }
+  - { symbol: TSLA, title: "Tesla Q1 deliveries report",        category: Tech, date: 2026-04-02, importance: 3 }
+  - { symbol: TSLA, title: "Tesla Q2 deliveries report",        category: Tech, date: 2026-07-02, importance: 3 }
+
+  # ---- Macro / Fed ----
+  - { symbol: null, title: "FOMC rate decision + Powell presser", category: Macro, date: 2026-06-17, importance: 3 }
+  - { symbol: null, title: "FOMC rate decision + Powell presser", category: Macro, date: 2026-07-29, importance: 3 }
+  - { symbol: null, title: "FOMC rate decision + Powell presser", category: Macro, date: 2026-09-16, importance: 3 }
+  - { symbol: null, title: "Jackson Hole symposium",              category: Macro, date: 2026-08-20, importance: 3 }
+  - { symbol: null, title: "Nonfarm payrolls (June)",             category: Macro, date: 2026-07-02, importance: 2 }
+  - { symbol: null, title: "CPI release (June)",                  category: Macro, date: 2026-07-15, importance: 3 }
+
+  # ---- Crypto ----
+  - { symbol: null, title: "Consensus 2026 (CoinDesk)",           category: Crypto, date: 2026-05-14, importance: 2 }
+  - { symbol: null, title: "Bitcoin Conference Vegas",            category: Crypto, date: 2026-04-30, importance: 2 }
+
+  # ---- Energy / Materials ----
+  - { symbol: null, title: "OPEC+ meeting",                       category: Energy, date: 2026-06-01, importance: 2 }

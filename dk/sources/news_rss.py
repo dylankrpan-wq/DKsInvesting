@@ -72,6 +72,24 @@ HIGH_IMPACT_KEYWORDS = [
     # Crypto-specific
     "etf approved", "etf rejected", "hard fork", "exploit", "hacked",
     "lawsuit dismissed",
+    # Conferences / keynotes / product launches (Jensen's GTC, Apple WWDC, etc.)
+    "keynote", "gtc", "wwdc", "investor day", "analyst day", "investor meeting",
+    "shareholder meeting", "annual meeting", "developer conference",
+    "ai summit", "tech summit",
+    "unveils", "unveiled", "reveals", "revealed", "introduces", "introduced",
+    "launches", "launched", "debuts", "debuted", "showcases",
+    "announces new", "announces partnership", "announces deal",
+    "announced today", "announces collaboration", "announces strategic",
+    # Earnings call commentary
+    "raises full-year", "raises full year", "tops revenue", "tops earnings",
+    "blowout quarter", "record revenue", "record earnings", "record bookings",
+    "record backlog", "record demand", "record orders",
+    # AI / chip cycle (relevant for NVDA, AMD, etc.)
+    "next generation", "next-gen", "new chip", "supercomputer",
+    "data center", "ai factory", "ai chip", "ai accelerator",
+    # Powell / macro speeches
+    "powell speaks", "powell says", "fed chair", "fomc minutes",
+    "dot plot", "rate cut", "rate hike", "rate decision",
 ]
 
 

@@ -77,6 +77,14 @@ def run_once() -> dict:
         print(f"[macro_context] {e}")
         summary["macro_context"] = 0
 
+    # Curated events calendar (Jensen GTC, Powell speeches, OPEC, etc.)
+    from dk.sources import events_calendar
+    try:
+        summary["events_alerts"] = events_calendar.check_and_alert()
+    except Exception as e:
+        print(f"[events_calendar] {e}")
+        summary["events_alerts"] = 0
+
     # TradingView technical ratings (free; no account needed)
     from dk.sources import tradingview_ratings
     try:

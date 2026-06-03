@@ -155,6 +155,49 @@ def _check_breaking_news(c, cfg: dict) -> int:
     return n
 
 
+def _check_news_velocity(c, cfg: dict) -> int:
+    """Detect news-velocity spikes per ticker — 5+ articles in last 60 min.
+
+    This is how we catch live events like Jensen's GTC keynote where the
+    headline volume explodes regardless of whether individual headlines hit
+    our breaking keywords.
+    """
+    min_articles = int(cfg.get("velocity_min_articles", 5))
+    window_min = int(cfg.get("velocity_window_minutes", 60))
+    n = 0
+    rows = c.execute(
+        f"""SELECT symbol, COUNT(*) AS cnt
+            FROM news
+            WHERE symbol IS NOT NULL
+              AND fetched_at >= datetime('now', '-{window_min} minutes')
+            GROUP BY symbol
+            HAVING cnt >= ?""",
+        (min_articles,),
+    ).fetchall()
+    for sym, cnt in rows:
+        if _already_alerted_today(c, sym, "NEWS_VELOCITY"):
+            continue
+        # Get a top headline for context
+        top = c.execute(
+            f"""SELECT title, source FROM news
+                WHERE symbol = ? AND fetched_at >= datetime('now', '-{window_min} minutes')
+                ORDER BY sentiment DESC LIMIT 1""",
+            (sym,),
+        ).fetchone()
+        sample_title = top[0][:100] if top else ""
+        sample_source = top[1] if top else ""
+        msg = (f"{sym} news velocity spike — {cnt} articles in {window_min} min "
+               f"(likely live event/conference). Sample: \"{sample_title}\" ({sample_source})")
+        c.execute(
+            "INSERT INTO alerts (symbol, kind, message, payload) VALUES (?, ?, ?, ?)",
+            (sym, "NEWS_VELOCITY", msg,
+             json.dumps({"article_count": cnt, "window_minutes": window_min,
+                          "sample_title": sample_title})),
+        )
+        n += 1
+    return n
+
+
 def _check_crypto(c, cfg: dict) -> int:
     move_pct = float(cfg.get("price_move_pct", 5.0))
     n = 0
@@ -183,6 +226,7 @@ def run() -> dict:
         counts["macro"] = _check_macro(c, cfg)
         counts["crypto"] = _check_crypto(c, cfg)
         counts["breaking_news"] = _check_breaking_news(c, cfg)
+        counts["news_velocity"] = _check_news_velocity(c, cfg)
         c.commit()
     counts["total_new"] = sum(counts.values())
     return counts
