@@ -350,6 +350,44 @@ with tab_now:
         st.caption(":bulb: Open the **Thesis** tab on any of these for the full deep-dive, "
                    "or click its row in **Opportunities** for a chart preview.")
 
+    # ---- Market-wide scan (the WHOLE market, not just the watchlist) ----
+    from dk.discovery import market_scan as _mscan
+    st.markdown("### 🌍 Market scan — opportunities beyond your watchlist")
+    st.caption("Biggest movers across the entire market right now, heat-scored with volume, "
+               "news tone and Reddit buzz. These are NOT on your watchlist unless tagged.")
+    market_ops = _mscan.top_market_opportunities(limit=12, exclude_watchlist=True)
+    if not market_ops:
+        st.info("No market scan data yet — click **Refresh data**, then **↻ Reload** after ~45s. "
+                "The scan pulls the day's gainers/losers/most-active across all US stocks.")
+    else:
+        mcols = st.columns(2)
+        for i, o in enumerate(market_ops):
+            direction = o.get("score_direction", "flat")
+            border = (ui_style.BULL if direction == "bull"
+                      else ui_style.BEAR if direction == "bear" else ui_style.NEUTRAL)
+            dir_icon = "▲" if direction == "bull" else ("▼" if direction == "bear" else "•")
+            mc = o.get("market_cap")
+            mc_str = (f"${mc/1e9:.1f}B" if mc and mc >= 1e9
+                      else (f"${mc/1e6:.0f}M" if mc else "—"))
+            price = o.get("last_price")
+            price_str = f"${price:,.2f}" if price else "—"
+            mcols[i % 2].markdown(
+                f"<div style='background:{ui_style.CARD};border:1px solid {ui_style.BORDER};"
+                f"border-left:4px solid {border};border-radius:10px;padding:11px 14px;margin:6px 0;'>"
+                f"<div style='display:flex;justify-content:space-between;'>"
+                f"<span style='font-size:16px;font-weight:800;color:{ui_style.TEXT};'>"
+                f"{dir_icon} {o['symbol']}</span>"
+                f"<span style='color:{border};font-weight:700;font-size:13px;'>heat {o['score']:.0f}</span>"
+                f"</div>"
+                f"<div style='color:{ui_style.TEXT_DIM};font-size:11px;margin-top:2px;'>"
+                f"{(o.get('name') or '')[:32]} · {price_str} · {mc_str}</div>"
+                f"<div style='color:{ui_style.TEXT};font-size:12px;margin-top:5px;'>{o.get('notes','')}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        st.caption(":bulb: Type any of these into the **Thesis** tab for a full deep-dive, or the "
+                   "**Charts** tab to chart it. Full ranked list is in the **Discover** tab.")
+
     # ---- Watch-out risks ----
     risks = radar_mod.watchlist_risks(limit=4)
     if risks:

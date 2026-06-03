@@ -131,6 +131,15 @@ def _run_once_impl() -> dict:
         print(f"[discovery] {e}")
         summary["discovery"] = {"error": str(e)}
 
+    # Market-wide scan — gainers/losers/most-active across the WHOLE market,
+    # heat-scored with our news + reddit data (no per-ticker fetches).
+    from dk.discovery import market_scan
+    try:
+        summary["market_scan"] = market_scan.scan()
+    except Exception as e:
+        print(f"[market_scan] {e}")
+        summary["market_scan"] = {"error": str(e)}
+
     # Multi-source trending: Reddit + StockTwits
     from dk.sources import trending_reddit, trending_stocktwits
     try:
