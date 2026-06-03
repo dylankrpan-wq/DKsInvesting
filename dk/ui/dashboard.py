@@ -201,24 +201,26 @@ with tb_col5:
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# Handle toolbar actions
+# Handle toolbar actions — SIMPLE + STABLE (no auto-rerun loops that can blank the page)
+_just_triggered = False
 if refresh_clicked:
     import os as _os_rf
     if _os_rf.getenv("DK_INPROCESS_SCHEDULER") == "1":
-        # On always-on hosts the background scheduler does the heavy lifting.
-        # Trigger it to run NOW in its background thread — non-blocking, so the
-        # page never freezes / drops the websocket. Data appears within ~30-45s.
-        from dk.jobs.scheduler import trigger_now
-        if trigger_now():
-            st.session_state["_dk_bg_refresh_started"] = True
-            st.toast("🔄 Background refresh started — new data in ~30-45s. Page stays live.", icon="🔄")
-        else:
-            st.toast("Scheduler still warming up — try again in a few seconds.", icon="⏳")
-        st.rerun()
+        # Hosted: trigger the background scheduler to poll now. Non-blocking,
+        # and crucially NO st.rerun() — the banner below renders on this same
+        # pass. Nothing here can freeze or blank the page.
+        try:
+            from dk.jobs.scheduler import trigger_now
+            if trigger_now():
+                _just_triggered = True
+                st.toast("🔄 Refresh started — new data in ~30–45s.", icon="🔄")
+            else:
+                st.toast("Scheduler warming up — wait a few seconds and try again.", icon="⏳")
+        except Exception as e:
+            st.toast(f"Couldn't start refresh: {e}", icon="⚠️")
     else:
-        # Local / no-scheduler: run the blocking poll with a spinner.
-        with st.spinner("🔄 Refreshing DK data — pulling prices, news, sentiment, themes, "
-                        "trending, brokers, alerts (~30-45s)..."):
+        # Local / no background scheduler: blocking poll with a spinner.
+        with st.spinner("🔄 Refreshing DK data (~30–45s)..."):
             try:
                 summary = poller.run_once()
                 st.session_state["_dk_last_summary"] = summary
@@ -228,45 +230,33 @@ if refresh_clicked:
                 st.code(traceback.format_exc(), language="python")
                 st.stop()
         st.toast("Refresh complete!", icon="✅")
+
+# ---- Static loading banner (renders once; no fragment, no auto-rerun) ----
+_poll_running = _just_triggered
+try:
+    _ps = store.get_poll_status()
+    if _ps.get("status") == "running":
+        _poll_running = True
+        # staleness guard — don't show forever if a poll crashed
+        if _ps.get("started_at"):
+            from datetime import datetime, timezone
+            try:
+                _stt = datetime.fromisoformat(_ps["started_at"].replace("Z", "+00:00"))
+                if _stt.tzinfo is None:
+                    _stt = _stt.replace(tzinfo=timezone.utc)
+                if (datetime.now(timezone.utc) - _stt).total_seconds() > 240:
+                    _poll_running = _just_triggered  # ignore stale 'running'
+            except Exception:
+                pass
+except Exception:
+    pass
+
+if _poll_running:
+    st.markdown(ui_style.loading_banner(), unsafe_allow_html=True)
+    if st.button("↻ Reload to show new data", key="reload_check", type="primary"):
         st.rerun()
 
-# ---- Live loading indicator (self-updating fragment) ----
-# Shows an animated spinner whenever a poll is running (manual trigger, the
-# 15-min auto-poll, or the startup poll) and auto-repaints the whole app the
-# moment it finishes. Re-checks every 3s WITHOUT blanking the page.
-@st.fragment(run_every=3)
-def _poll_indicator():
-    from datetime import datetime, timezone
-    status = store.get_poll_status()
-    cur = status.get("status", "idle")
-    prev = st.session_state.get("_dk_prev_poll_status", "idle")
-
-    running = cur == "running"
-    # Staleness guard: if 'running' but started >4 min ago, treat as done (crash safety)
-    if running and status.get("started_at"):
-        try:
-            started = datetime.fromisoformat(status["started_at"].replace("Z", "+00:00"))
-            if started.tzinfo is None:
-                started = started.replace(tzinfo=timezone.utc)
-            if (datetime.now(timezone.utc) - started).total_seconds() > 240:
-                running = False
-        except Exception:
-            pass
-
-    if running:
-        st.markdown(ui_style.loading_banner(), unsafe_allow_html=True)
-        st.session_state["_dk_prev_poll_status"] = "running"
-    else:
-        if prev == "running":
-            # Poll just finished — repaint the whole app with fresh data, once.
-            st.session_state["_dk_prev_poll_status"] = "idle"
-            st.toast("✅ Data updated — briefing refreshed!", icon="✅")
-            st.rerun(scope="app")
-        st.session_state["_dk_prev_poll_status"] = "idle"
-
-_poll_indicator()
-
-# Show the last run summary (after a refresh completes)
+# Show the last run summary (after a local refresh completes)
 _last_summary = st.session_state.get("_dk_last_summary")
 if _last_summary:
     with st.expander(":white_check_mark: Last refresh — run summary", expanded=False):
