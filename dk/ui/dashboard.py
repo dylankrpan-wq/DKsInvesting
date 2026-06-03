@@ -1243,6 +1243,34 @@ with tab_news:
     art_24h = q("SELECT COUNT(*) AS n FROM news WHERE fetched_at >= datetime('now', '-24 hours')")
     nc4.metric("Articles (24h)", int(art_24h.iloc[0]["n"] or 0))
 
+    # ===== Power Players panel =====
+    from dk.sources import people_tracker
+    st.markdown("---")
+    st.markdown("### 👤 Power Players (last 24h)")
+    st.caption("Tracked figures with market pull — politicians, central bankers, "
+               "tech CEOs, finance titans, crypto leaders. Edit `config/people.yaml` "
+               "to add/remove.")
+    mentions = people_tracker.person_mention_counts(hours=24)
+    if not mentions:
+        st.info("No tracked figures mentioned in news yet — refresh data above.")
+    else:
+        pp_df = pd.DataFrame(mentions)
+
+        def _weight_label(w):
+            return "🔴 Heavy" if w >= 3 else ("🟠 Medium" if w == 2 else "⚪ Low")
+
+        pp_df["pull"] = pp_df["weight"].apply(_weight_label)
+        st.dataframe(
+            pp_df[["pull", "name", "role", "mentions", "avg_sentiment", "affects"]],
+            use_container_width=True, hide_index=True,
+            column_config={
+                "mentions": st.column_config.NumberColumn("mentions (24h)", format="%d"),
+                "avg_sentiment": st.column_config.NumberColumn("avg sentiment", format="%+.2f"),
+            },
+        )
+        st.caption(":bulb: When any of these figures speaks/posts/announces something with a breaking-keyword "
+                   "match or strong sentiment, a **PERSON_ACTIVITY** alert fires in the Alerts tab.")
+
     # ===== Breaking news panel =====
     st.markdown("---")
     st.markdown("### ⚡ Breaking news (high-impact, last 24h)")

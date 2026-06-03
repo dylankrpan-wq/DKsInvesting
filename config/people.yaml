@@ -1,0 +1,201 @@
+# DK Investing — market-moving people watchlist.
+# When any of these names appears in a news headline + sentiment is strong
+# (positive or negative) OR a breaking keyword hits, fires a PERSON_ACTIVITY alert.
+#
+# Edit freely. The aliases list catches all the ways outlets refer to them.
+# `affects`: tickers/themes most likely to move on this person's words.
+# `weight`: 1 (medium pull) | 2 (heavy pull) | 3 (market-moving).
+
+people:
+  # ==================== POLITICAL ====================
+  - id: trump
+    name: Donald Trump
+    role: US President
+    aliases: ["Donald Trump", "Trump", "President Trump", "POTUS", "the President"]
+    affects: [SPY, QQQ, DXY, TSLA, BTC, ETH, "tariffs", "trade"]
+    weight: 3
+    keywords: [tariff, tariffs, executive order, sanctions, trade deal,
+               "national security", "america first", "fed independence",
+               "powell", impeach, indictment, criminal, "rate cut",
+               truth social, posts on, deal with, threatens]
+
+  - id: vance
+    name: JD Vance
+    role: US Vice President
+    aliases: ["JD Vance", "Vance", "Vice President Vance"]
+    affects: [SPY, "tech regulation", "antitrust"]
+    weight: 2
+
+  - id: powell
+    name: Jerome Powell
+    role: Federal Reserve Chair
+    aliases: ["Jerome Powell", "Jay Powell", "Powell", "Fed Chair Powell", "Chair Powell"]
+    affects: [SPY, QQQ, "rates", DXY, TLT, "yields"]
+    weight: 3
+
+  - id: bessent
+    name: Scott Bessent
+    role: US Treasury Secretary
+    aliases: ["Scott Bessent", "Bessent", "Treasury Secretary"]
+    affects: [SPY, DXY, TLT, "yields"]
+    weight: 3
+
+  - id: lutnick
+    name: Howard Lutnick
+    role: US Commerce Secretary
+    aliases: ["Howard Lutnick", "Lutnick", "Commerce Secretary"]
+    affects: ["trade", "tariffs", "semiconductors"]
+    weight: 2
+
+  - id: atkins
+    name: Paul Atkins
+    role: SEC Chair
+    aliases: ["Paul Atkins", "Atkins", "SEC Chair", "SEC chairman"]
+    affects: ["crypto regulation", BTC, ETH, COIN]
+    weight: 2
+
+  - id: yellen
+    name: Janet Yellen
+    role: Former Treasury Secretary
+    aliases: ["Janet Yellen", "Yellen"]
+    affects: [SPY, DXY]
+    weight: 1
+
+  - id: lagarde
+    name: Christine Lagarde
+    role: ECB President
+    aliases: ["Christine Lagarde", "Lagarde", "ECB President"]
+    affects: [EUR, "european rates"]
+    weight: 2
+
+  # ==================== BIG TECH CEOs ====================
+  - id: musk
+    name: Elon Musk
+    role: Tesla / X / xAI CEO
+    aliases: ["Elon Musk", "Musk"]
+    affects: [TSLA, X, BTC, DOGE, "crypto"]
+    weight: 3
+    keywords: [tweets, posts on x, tesla event, robotaxi, optimus, dogecoin,
+               xai, neuralink, starship, full self-driving]
+
+  - id: huang
+    name: Jensen Huang
+    role: NVIDIA CEO
+    aliases: ["Jensen Huang", "Jensen", "NVIDIA CEO"]
+    affects: [NVDA, AMD, AVGO, "AI", "semis"]
+    weight: 3
+    keywords: [gtc, keynote, ai chip, supercomputer, blackwell, rubin, ai factory]
+
+  - id: cook
+    name: Tim Cook
+    role: Apple CEO
+    aliases: ["Tim Cook", "Apple CEO"]
+    affects: [AAPL, "apple suppliers"]
+    weight: 2
+
+  - id: pichai
+    name: Sundar Pichai
+    role: Alphabet CEO
+    aliases: ["Sundar Pichai", "Pichai", "Alphabet CEO", "Google CEO"]
+    affects: [GOOGL, GOOG, "search", "AI"]
+    weight: 2
+
+  - id: nadella
+    name: Satya Nadella
+    role: Microsoft CEO
+    aliases: ["Satya Nadella", "Nadella", "Microsoft CEO"]
+    affects: [MSFT, "AI", "cloud"]
+    weight: 2
+
+  - id: zuckerberg
+    name: Mark Zuckerberg
+    role: Meta CEO
+    aliases: ["Mark Zuckerberg", "Zuckerberg", "Zuck", "Meta CEO"]
+    affects: [META, "VR", "AI"]
+    weight: 2
+
+  - id: altman
+    name: Sam Altman
+    role: OpenAI CEO
+    aliases: ["Sam Altman", "Altman", "OpenAI CEO"]
+    affects: [MSFT, NVDA, "AI"]
+    weight: 3
+
+  - id: jassy
+    name: Andy Jassy
+    role: Amazon CEO
+    aliases: ["Andy Jassy", "Jassy", "Amazon CEO"]
+    affects: [AMZN]
+    weight: 2
+
+  # ==================== FINANCE TITANS ====================
+  - id: buffett
+    name: Warren Buffett
+    role: Berkshire Hathaway CEO
+    aliases: ["Warren Buffett", "Buffett", "Berkshire"]
+    affects: [BRK.A, BRK.B, AAPL, "value stocks"]
+    weight: 3
+
+  - id: dimon
+    name: Jamie Dimon
+    role: JPMorgan CEO
+    aliases: ["Jamie Dimon", "Dimon", "JPMorgan CEO"]
+    affects: [JPM, XLF, "banks"]
+    weight: 3
+
+  - id: fink
+    name: Larry Fink
+    role: BlackRock CEO
+    aliases: ["Larry Fink", "Fink", "BlackRock CEO"]
+    affects: [BLK, IBIT, "crypto ETFs"]
+    weight: 3
+
+  - id: ackman
+    name: Bill Ackman
+    role: Pershing Square CEO
+    aliases: ["Bill Ackman", "Ackman"]
+    affects: ["activist targets"]
+    weight: 2
+
+  - id: wood
+    name: Cathie Wood
+    role: ARK Invest CEO
+    aliases: ["Cathie Wood", "Cathy Wood", "ARK Invest"]
+    affects: [ARKK, TSLA, "innovation"]
+    weight: 1
+
+  - id: dalio
+    name: Ray Dalio
+    role: Bridgewater founder
+    aliases: ["Ray Dalio", "Dalio", "Bridgewater"]
+    affects: ["macro", "gold"]
+    weight: 2
+
+  - id: druckenmiller
+    name: Stanley Druckenmiller
+    role: Duquesne CIO
+    aliases: ["Stanley Druckenmiller", "Druckenmiller"]
+    affects: ["macro"]
+    weight: 2
+
+  # ==================== CRYPTO ====================
+  - id: saylor
+    name: Michael Saylor
+    role: Strategy / MSTR Chairman
+    aliases: ["Michael Saylor", "Saylor", "MicroStrategy"]
+    affects: [MSTR, BTC]
+    weight: 3
+
+  - id: armstrong
+    name: Brian Armstrong
+    role: Coinbase CEO
+    aliases: ["Brian Armstrong", "Armstrong", "Coinbase CEO"]
+    affects: [COIN, BTC, ETH]
+    weight: 2
+
+  - id: vitalik
+    name: Vitalik Buterin
+    role: Ethereum co-founder
+    aliases: ["Vitalik Buterin", "Vitalik"]
+    affects: [ETH]
+    weight: 2

@@ -37,6 +37,11 @@ GLOBAL_FEEDS = [
     # International
     ("Reuters Europe", "https://feeds.reuters.com/reuters/UKBusinessNews", "EU"),
     ("Nikkei Asia", "https://asia.nikkei.com/rss/feed/nar", "ASIA"),
+
+    # Power players — direct primary-source feeds (highest signal)
+    ("Trump Truth Social", "https://trumpstruth.org/feed", "US"),
+    ("White House", "https://www.whitehouse.gov/feed/", "US"),
+    ("White House Briefing Room", "https://www.whitehouse.gov/briefing-room/feed/", "US"),
 ]
 
 # Crypto-specific high-signal feeds

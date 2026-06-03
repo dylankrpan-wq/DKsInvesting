@@ -85,6 +85,14 @@ def run_once() -> dict:
         print(f"[events_calendar] {e}")
         summary["events_alerts"] = 0
 
+    # Power players tracking (Trump, Musk, Powell, Buffett, every CEO who moves stocks)
+    from dk.sources import people_tracker
+    try:
+        summary["person_alerts"] = people_tracker.detect_and_alert(window_hours=4)
+    except Exception as e:
+        print(f"[people_tracker] {e}")
+        summary["person_alerts"] = 0
+
     # TradingView technical ratings (free; no account needed)
     from dk.sources import tradingview_ratings
     try:
