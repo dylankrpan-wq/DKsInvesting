@@ -93,6 +93,14 @@ def run_once() -> dict:
         print(f"[people_tracker] {e}")
         summary["person_alerts"] = 0
 
+    # X (Twitter) posts via Nitter/RSSHub for tracked power players
+    from dk.sources import x_feeds
+    try:
+        summary["x_posts"] = x_feeds.fetch_all()
+    except Exception as e:
+        print(f"[x_feeds] {e}")
+        summary["x_posts"] = 0
+
     # TradingView technical ratings (free; no account needed)
     from dk.sources import tradingview_ratings
     try:

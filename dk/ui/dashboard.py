@@ -1247,9 +1247,17 @@ with tab_news:
     from dk.sources import people_tracker
     st.markdown("---")
     st.markdown("### 👤 Power Players (last 24h)")
-    st.caption("Tracked figures with market pull — politicians, central bankers, "
-               "tech CEOs, finance titans, crypto leaders. Edit `config/people.yaml` "
-               "to add/remove.")
+    st.caption("Tracked figures with market pull. Edit `config/people.yaml` to add/remove.")
+
+    # Load full people config so we can render X links
+    import yaml as _yaml
+    _people_path = (__import__("dk.config", fromlist=["CONFIG_DIR"])).CONFIG_DIR / "people.yaml"
+    _people_cfg = []
+    if _people_path.exists():
+        with open(_people_path, "r", encoding="utf-8") as _f:
+            _people_cfg = (_yaml.safe_load(_f) or {}).get("people") or []
+    _people_by_name = {p["name"]: p for p in _people_cfg}
+
     mentions = people_tracker.person_mention_counts(hours=24)
     if not mentions:
         st.info("No tracked figures mentioned in news yet — refresh data above.")
@@ -1259,17 +1267,59 @@ with tab_news:
         def _weight_label(w):
             return "🔴 Heavy" if w >= 3 else ("🟠 Medium" if w == 2 else "⚪ Low")
 
+        def _x_link(name):
+            p = _people_by_name.get(name) or {}
+            h = p.get("x_handle")
+            return f"https://x.com/{h}" if h else None
+
         pp_df["pull"] = pp_df["weight"].apply(_weight_label)
+        pp_df["X profile"] = pp_df["name"].apply(_x_link)
         st.dataframe(
-            pp_df[["pull", "name", "role", "mentions", "avg_sentiment", "affects"]],
+            pp_df[["pull", "name", "role", "mentions", "avg_sentiment", "X profile", "affects"]],
             use_container_width=True, hide_index=True,
             column_config={
                 "mentions": st.column_config.NumberColumn("mentions (24h)", format="%d"),
                 "avg_sentiment": st.column_config.NumberColumn("avg sentiment", format="%+.2f"),
+                "X profile": st.column_config.LinkColumn("X profile", display_text="@view"),
             },
         )
-        st.caption(":bulb: When any of these figures speaks/posts/announces something with a breaking-keyword "
+        st.caption(":bulb: When any tracked figure speaks/posts/announces something with a breaking-keyword "
                    "match or strong sentiment, a **PERSON_ACTIVITY** alert fires in the Alerts tab.")
+
+    # ===== Recent X posts panel =====
+    st.markdown("#### 🐦 Recent X posts from tracked figures")
+    x_posts = q("""SELECT fetched_at, source, title, url, sentiment
+                   FROM news WHERE source LIKE 'X:%'
+                     AND fetched_at >= datetime('now', '-48 hours')
+                   ORDER BY fetched_at DESC LIMIT 30""")
+    if x_posts.empty:
+        st.info("No X posts captured in the last 48 hours. Nitter/RSSHub instances may be "
+                "rate-limited or down — use the X profile links above to check manually. "
+                "(Newsworthy posts still surface via news coverage even when RSS is unavailable.)")
+        # Show all the direct profile links as a fallback
+        x_handles = [(p["name"], p.get("x_handle")) for p in _people_cfg if p.get("x_handle")]
+        if x_handles:
+            cols = st.columns(4)
+            for i, (n, h) in enumerate(x_handles):
+                cols[i % 4].markdown(f"[**{n}** @{h}](https://x.com/{h})")
+    else:
+        for _, row in x_posts.iterrows():
+            tone = senti_label(row["sentiment"]) if row["sentiment"] is not None else "·"
+            color = "green" if tone == "+" else ("red" if tone == "-" else "gray")
+            handle = row["source"].replace("X:", "").lstrip("@")
+            st.markdown(
+                f"<div style='background:rgba(78,161,255,0.06);border-left:3px solid #4ea1ff;"
+                f"padding:8px 12px;margin:5px 0;border-radius:6px;'>"
+                f"<span style='color:#4ea1ff;font-weight:700;font-size:11px;'>🐦 {handle}</span> "
+                f"<span style='color:#{ {'green':'00d4aa','red':'ff5d5d','gray':'8b95ad'}[color] }'>"
+                f"{tone}</span> "
+                f"<a href='{row['url']}' style='color:#e8ecf4;text-decoration:none;' target='_blank'>"
+                f"{row['title']}</a>"
+                f"<div style='color:#8b95ad;font-size:11px;margin-top:3px;'>"
+                f"{row['fetched_at']}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
 
     # ===== Breaking news panel =====
     st.markdown("---")

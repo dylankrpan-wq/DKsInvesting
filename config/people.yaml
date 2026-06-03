@@ -14,6 +14,8 @@ people:
     aliases: ["Donald Trump", "Trump", "President Trump", "POTUS", "the President"]
     affects: [SPY, QQQ, DXY, TSLA, BTC, ETH, "tariffs", "trade"]
     weight: 3
+    x_handle: realDonaldTrump
+    truth_social: realDonaldTrump
     keywords: [tariff, tariffs, executive order, sanctions, trade deal,
                "national security", "america first", "fed independence",
                "powell", impeach, indictment, criminal, "rate cut",
@@ -25,6 +27,7 @@ people:
     aliases: ["JD Vance", "Vance", "Vice President Vance"]
     affects: [SPY, "tech regulation", "antitrust"]
     weight: 2
+    x_handle: JDVance
 
   - id: powell
     name: Jerome Powell
@@ -75,6 +78,7 @@ people:
     aliases: ["Elon Musk", "Musk"]
     affects: [TSLA, X, BTC, DOGE, "crypto"]
     weight: 3
+    x_handle: elonmusk
     keywords: [tweets, posts on x, tesla event, robotaxi, optimus, dogecoin,
                xai, neuralink, starship, full self-driving]
 
@@ -84,6 +88,7 @@ people:
     aliases: ["Jensen Huang", "Jensen", "NVIDIA CEO"]
     affects: [NVDA, AMD, AVGO, "AI", "semis"]
     weight: 3
+    x_handle: nvidia
     keywords: [gtc, keynote, ai chip, supercomputer, blackwell, rubin, ai factory]
 
   - id: cook
@@ -92,6 +97,7 @@ people:
     aliases: ["Tim Cook", "Apple CEO"]
     affects: [AAPL, "apple suppliers"]
     weight: 2
+    x_handle: tim_cook
 
   - id: pichai
     name: Sundar Pichai
@@ -99,6 +105,7 @@ people:
     aliases: ["Sundar Pichai", "Pichai", "Alphabet CEO", "Google CEO"]
     affects: [GOOGL, GOOG, "search", "AI"]
     weight: 2
+    x_handle: sundarpichai
 
   - id: nadella
     name: Satya Nadella
@@ -106,6 +113,7 @@ people:
     aliases: ["Satya Nadella", "Nadella", "Microsoft CEO"]
     affects: [MSFT, "AI", "cloud"]
     weight: 2
+    x_handle: satyanadella
 
   - id: zuckerberg
     name: Mark Zuckerberg
@@ -113,6 +121,8 @@ people:
     aliases: ["Mark Zuckerberg", "Zuckerberg", "Zuck", "Meta CEO"]
     affects: [META, "VR", "AI"]
     weight: 2
+    x_handle: finkd
+    note: "Zuck rarely posts to X; uses Threads/IG primarily"
 
   - id: altman
     name: Sam Altman
@@ -120,6 +130,7 @@ people:
     aliases: ["Sam Altman", "Altman", "OpenAI CEO"]
     affects: [MSFT, NVDA, "AI"]
     weight: 3
+    x_handle: sama
 
   - id: jassy
     name: Andy Jassy
@@ -127,6 +138,7 @@ people:
     aliases: ["Andy Jassy", "Jassy", "Amazon CEO"]
     affects: [AMZN]
     weight: 2
+    x_handle: ajassy
 
   # ==================== FINANCE TITANS ====================
   - id: buffett
@@ -156,6 +168,7 @@ people:
     aliases: ["Bill Ackman", "Ackman"]
     affects: ["activist targets"]
     weight: 2
+    x_handle: BillAckman
 
   - id: wood
     name: Cathie Wood
@@ -163,6 +176,7 @@ people:
     aliases: ["Cathie Wood", "Cathy Wood", "ARK Invest"]
     affects: [ARKK, TSLA, "innovation"]
     weight: 1
+    x_handle: CathieDWood
 
   - id: dalio
     name: Ray Dalio
@@ -185,6 +199,7 @@ people:
     aliases: ["Michael Saylor", "Saylor", "MicroStrategy"]
     affects: [MSTR, BTC]
     weight: 3
+    x_handle: saylor
 
   - id: armstrong
     name: Brian Armstrong
@@ -192,6 +207,7 @@ people:
     aliases: ["Brian Armstrong", "Armstrong", "Coinbase CEO"]
     affects: [COIN, BTC, ETH]
     weight: 2
+    x_handle: brian_armstrong
 
   - id: vitalik
     name: Vitalik Buterin
@@ -199,3 +215,4 @@ people:
     aliases: ["Vitalik Buterin", "Vitalik"]
     affects: [ETH]
     weight: 2
+    x_handle: VitalikButerin
