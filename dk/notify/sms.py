@@ -41,12 +41,46 @@ def _cfg() -> dict:
 
 
 def is_configured() -> bool:
+    if get_key("TELEGRAM_BOT_TOKEN") and get_key("TELEGRAM_CHAT_ID"):
+        return True
     if get_key("TWILIO_ACCOUNT_SID") and get_key("TWILIO_AUTH_TOKEN") \
             and get_key("TWILIO_FROM") and get_key("SMS_TO_NUMBER"):
         return True
     if get_key("SMS_TO_NUMBER") and get_key("SMS_CARRIER") and get_key("SMTP_HOST"):
         return True
     return False
+
+
+def active_channel() -> str:
+    if get_key("TELEGRAM_BOT_TOKEN") and get_key("TELEGRAM_CHAT_ID"):
+        return "Telegram"
+    if get_key("TWILIO_ACCOUNT_SID") and get_key("SMS_TO_NUMBER"):
+        return "Twilio SMS"
+    if get_key("SMS_CARRIER") and get_key("SMTP_HOST"):
+        return "Email-to-SMS"
+    return "none"
+
+
+def _send_telegram(body: str) -> bool:
+    token = get_key("TELEGRAM_BOT_TOKEN")
+    chat_id = get_key("TELEGRAM_CHAT_ID")
+    if not (token and chat_id):
+        return False
+    try:
+        import requests
+        r = requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": body[:4000],
+                  "disable_web_page_preview": True},
+            timeout=15,
+        )
+        if r.status_code == 200:
+            return True
+        print(f"[telegram] HTTP {r.status_code}: {r.text[:200]}")
+        return False
+    except Exception as e:
+        print(f"[telegram] {e}")
+        return False
 
 
 def _send_twilio(body: str) -> bool:
@@ -102,6 +136,9 @@ def _send_email_gateway(body: str) -> bool:
 
 
 def _send(body: str) -> bool:
+    # Telegram first — free, instant, no carrier approval needed.
+    if _send_telegram(body):
+        return True
     if _send_twilio(body):
         return True
     return _send_email_gateway(body)

@@ -766,21 +766,25 @@ with tab_tools:
         configured = _sms.is_configured()
         st.markdown(
             f"**Status:** {'🟢 Configured' if configured else '🔴 Not configured'}"
+            + (f" · channel: **{_sms.active_channel()}**" if configured else "")
         )
-        st.caption("You'll get ONE concise text per 15-min cycle summarizing the top live events "
+        st.caption("You'll get ONE concise push per 15-min cycle summarizing the top live events "
                    "(breaking news, conference/keynote spikes, power-player moves, rank jumps, "
-                   "imminent earnings/macro) — never one-text-per-alert spam.")
+                   "imminent earnings/macro) — never one-per-alert spam.")
         with st.expander("How to set it up", expanded=not configured):
             st.markdown("""
-**Option A — Twilio (recommended, true SMS):**
-1. Make a free account at [twilio.com](https://twilio.com), get a trial number
-2. Add to Railway → Variables (or `config/secrets.env` locally):
-   - `SMS_TO_NUMBER` = your phone, e.g. `+13055551234`
-   - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` (your Twilio number)
+**⭐ Telegram (recommended — free, instant, no approval):**
+1. In Telegram, message **@BotFather** → `/newbot` → copy the **bot token**
+2. Message your new bot once (say hi), then message **@userinfobot** to get your numeric **chat ID**
+3. Add to Railway → Variables (and `config/secrets.env` locally):
+   - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
 
-**Option B — free email-to-SMS gateway (carrier-dependent):**
-- `SMS_TO_NUMBER`, `SMS_CARRIER` (verizon/att/tmobile/…), and SMTP creds
-  (`SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_USER`, `SMTP_PASS`=Gmail app password)
+**Twilio (true SMS — needs carrier A2P approval, 1–3 days):**
+- `SMS_TO_NUMBER`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM`
+- New US accounts must complete A2P 10DLC registration before texts deliver.
+
+**Email-to-SMS gateway (free, carrier-dependent):**
+- `SMS_TO_NUMBER`, `SMS_CARRIER`, and SMTP creds.
 
 Tune which alert kinds count as "live events" in `config/watchlist.yaml` → `sms:`.
 """)
