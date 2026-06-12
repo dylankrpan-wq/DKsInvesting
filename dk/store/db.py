@@ -242,6 +242,16 @@ CREATE TABLE IF NOT EXISTS crypto_prices (
     change_24h_pct REAL,
     PRIMARY KEY (symbol, ts)
 );
+
+CREATE TABLE IF NOT EXISTS daily_briefs (
+    brief_date TEXT PRIMARY KEY,         -- one row per market day (idempotent)
+    generated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    model TEXT,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    markdown TEXT,
+    context_json TEXT
+);
 """
 
 

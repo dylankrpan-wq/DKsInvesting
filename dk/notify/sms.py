@@ -150,6 +150,45 @@ def send_test() -> bool:
                  "alerts here during market hours.")
 
 
+# Per-channel message size caps (chars). _send_twilio/_send_email_gateway also
+# truncate defensively, so chunks must already fit the active channel's cap.
+_CHANNEL_CAPS = {"Telegram": 4000, "Twilio SMS": 1500, "Email-to-SMS": 1000}
+
+
+def send_brief(text: str) -> int:
+    """Send the daily desk brief to the phone channel, split into chunks sized
+    for the active channel's cap on paragraph boundaries. Returns chunks sent."""
+    if not is_configured():
+        return 0
+    cap = _CHANNEL_CAPS.get(active_channel(), 1000)
+    # First hard-split any paragraph longer than the cap, then greedily pack.
+    pieces: list[str] = []
+    for para in text.split("\n\n"):
+        while len(para) > cap:
+            pieces.append(para[:cap])
+            para = para[cap:]
+        if para:
+            pieces.append(para)
+    chunks: list[str] = []
+    current = ""
+    for piece in pieces:
+        if len(current) + len(piece) + 2 > cap:
+            if current:
+                chunks.append(current)
+            current = piece
+        else:
+            current = f"{current}\n\n{piece}" if current else piece
+    if current:
+        chunks.append(current)
+    sent = 0
+    for chunk in chunks:
+        if _send(chunk):
+            sent += 1
+        else:
+            break  # channel failed — don't spam retries for remaining chunks
+    return sent
+
+
 def push_digest() -> dict:
     """Compose + send ONE digest SMS of unsent live-event alerts. Marks them sms_sent=1."""
     if not is_configured():

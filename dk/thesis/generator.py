@@ -9,7 +9,8 @@ import sqlite3
 from dataclasses import dataclass, field, asdict
 from datetime import date
 import yfinance as yf
-from dk.config import DB_PATH, get_key
+from dk.config import DB_PATH
+from dk import llm
 from dk.opportunity.score import score_symbol
 from dk.indicators import ta as ta_mod
 from dk.indicators import sentiment_ind
@@ -165,16 +166,7 @@ def _risks(ta_snap, senti, earn_days: int | None) -> list[str]:
 
 def _maybe_claude_narrative(thesis: Thesis) -> str | None:
     """Optional: enrich verdict + risks with Claude prose if API key is set."""
-    api_key = get_key("ANTHROPIC_API_KEY")
-    if not api_key:
-        return None
-    try:
-        from anthropic import Anthropic
-    except ImportError:
-        return None
-    try:
-        client = Anthropic(api_key=api_key)
-        prompt = f"""You are a sharp equity analyst writing for an experienced trader.
+    prompt = f"""You are a sharp equity analyst writing for an experienced trader.
 Write a 4-6 sentence narrative thesis for {thesis.symbol} ({thesis.company}, sector: {thesis.sector}).
 Frame it as an opportunity-discovery note, NOT a buy/sell recommendation.
 
@@ -190,15 +182,8 @@ Top recent negative headline: {(thesis.sentiment.get('top_bear') or {}).get('tit
 Earnings: {thesis.earnings}
 
 Be specific. No hedging filler. End with one sentence on what to watch next."""
-        resp = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=400,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return "".join(b.text for b in resp.content if hasattr(b, "text"))
-    except Exception as e:
-        print(f"[claude] narrative skipped: {e}")
-        return None
+    result = llm.complete(prompt, model="claude-haiku-4-5", max_tokens=400)
+    return result.get("text") if result else None
 
 
 def build(symbol: str) -> Thesis:

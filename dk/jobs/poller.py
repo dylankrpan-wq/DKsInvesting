@@ -219,6 +219,15 @@ def _run_once_impl() -> dict:
         print(f"[sms] {e}")
         summary["sms"] = {"error": str(e)}
 
+    # Daily desk brief — Claude-written synthesis, once per market day after
+    # the configured UTC hour (no-op without ANTHROPIC_API_KEY)
+    try:
+        from dk.briefing import desk_brief
+        summary["desk_brief"] = desk_brief.maybe_generate()
+    except Exception as e:
+        print(f"[desk_brief] {e}")
+        summary["desk_brief"] = {"error": str(e)}
+
     print(f"[poller] done: {summary}")
     return summary
 

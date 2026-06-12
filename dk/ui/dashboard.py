@@ -397,6 +397,28 @@ with tab_now:
             st.json(_h["last_summary"])
         st.caption("Env: " + ", ".join(f"{k}={v}" for k, v in (_h.get('env') or {}).items()))
 
+    # ---- Daily desk brief (Claude-written, grounded in DB data only) ----
+    from dk.briefing import desk_brief as _brief_mod
+    _brief = _brief_mod.latest()
+    _brief_label = (f"🗞️ Daily desk brief — {_brief['brief_date']}" if _brief
+                    else "🗞️ Daily desk brief")
+    with st.expander(_brief_label, expanded=False):
+        if _brief:
+            st.markdown(_brief["markdown"])
+            st.caption(f"Generated {_brief['generated_at']} UTC · {_brief['model']} · "
+                       f"grounded in the local DB — the model adds no outside data.")
+        else:
+            st.info("No brief yet. One generates automatically on the first refresh after "
+                    "US market close (weekdays), or generate one now. Requires "
+                    "`ANTHROPIC_API_KEY` in `config/secrets.env`.")
+        if st.button("✍️ Generate today's brief now", key="gen_desk_brief"):
+            with st.spinner("Reading the tape and writing today's brief…"):
+                _res = _brief_mod.generate(force=True)
+            if _res.get("llm"):
+                st.rerun()
+            else:
+                st.warning(_res.get("note", "Generation failed."))
+
     st.subheader("📡 What matters now")
     st.caption("Your live briefing — synthesized from news, price action, sentiment, power players, "
                "and catalysts. Pointing out what's worth your attention, not telling you what to trade.")
