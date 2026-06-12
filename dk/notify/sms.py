@@ -18,6 +18,7 @@ from dk.config import DB_PATH, get_key, load_watchlist
 
 # Alert kinds that count as "live events" worth a text. Tunable in watchlist.yaml.
 DEFAULT_LIVE_KINDS = [
+    "CONVICTION_LONG", "CONVICTION_SHORT",
     "HIGH_IMPACT_NEWS", "NEWS_VELOCITY", "PERSON_ACTIVITY", "EVENT_NEAR",
     "MACRO_NEAR", "EARNINGS_NEAR", "RANK_JUMP", "NEW_TOP", "TECH_SIGNAL",
 ]
@@ -212,6 +213,7 @@ def push_digest() -> dict:
 
         # Rank by kind priority, dedupe by (symbol, kind)
         prio = {k: i for i, k in enumerate([
+            "CONVICTION_LONG", "CONVICTION_SHORT",
             "EVENT_NEAR", "PERSON_ACTIVITY", "HIGH_IMPACT_NEWS", "NEWS_VELOCITY",
             "MACRO_NEAR", "RANK_JUMP", "NEW_TOP", "EARNINGS_NEAR", "TECH_SIGNAL",
         ])}

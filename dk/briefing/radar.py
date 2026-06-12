@@ -14,6 +14,8 @@ from dk.config import DB_PATH, equity_symbols
 
 # alert kind -> (category, icon, why-it-matters template)
 KIND_META = {
+    "CONVICTION_LONG":  ("Conviction", "🎯", "Multiple bullish signals converging hard — the strongest long-side setup the system sees."),
+    "CONVICTION_SHORT": ("Conviction", "🎯", "Multiple bearish signals converging hard — the strongest short-side setup the system sees."),
     "HIGH_IMPACT_NEWS": ("Breaking", "⚡", "High-impact headline just dropped — these move stocks fast."),
     "NEWS_VELOCITY":    ("Live Event", "📡", "News volume is spiking — usually means a live event, conference, or developing story."),
     "PERSON_ACTIVITY":  ("Power Player", "📣", "A market-moving figure just spoke or posted — watch for follow-through."),
@@ -33,6 +35,8 @@ KIND_META = {
 
 # Base priority per kind (0-100). Boosted by ownership/watchlist/recency.
 KIND_PRIORITY = {
+    "CONVICTION_LONG": 90,
+    "CONVICTION_SHORT": 90,
     "HIGH_IMPACT_NEWS": 88,
     "PERSON_ACTIVITY": 86,
     "NEWS_VELOCITY": 84,

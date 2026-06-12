@@ -72,6 +72,11 @@ alerts:
   sentiment_threshold: 0.6     # |compound score| >= this is "strong"
   sentiment_min_articles: 3    # require N articles in window for ticker-level sentiment surge
   macro_window_days: 3         # alert importance>=2 macro events within N days
+  # 🎯 High-conviction setups (CONVICTION_LONG / CONVICTION_SHORT) — fires when
+  # the radar's convergence math crosses these bars. Lower = more alerts.
+  conviction_long_min: 35.0    # bullish convergence (score+lean+tone+momentum+catalyst)
+  conviction_short_min: 24.0   # bearish convergence (lean+tone+down momentum+earnings risk)
+  conviction_scan_heat_min: 45.0  # off-watchlist market-scan heat to qualify
 
 sentiment:
   engine: vader   # options: vader (fast, free) | finbert (heavier, financial-tuned, opt-in)
@@ -103,6 +108,8 @@ brief:
 sms:
   max_items_per_text: 5
   live_kinds:
+    - CONVICTION_LONG
+    - CONVICTION_SHORT
     - HIGH_IMPACT_NEWS
     - NEWS_VELOCITY
     - PERSON_ACTIVITY

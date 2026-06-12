@@ -229,6 +229,59 @@ def _check_technical_signals(c, cfg: dict) -> int:
     return n
 
 
+def _check_conviction(c, cfg: dict) -> int:
+    """High-conviction long/short setups — fires when the radar's convergence
+    scores cross the configured bars. Watchlist names come from the radar's
+    spotlight (bullish) and risks (bearish) convergence; off-watchlist names
+    from fresh market-scan candidates with extreme heat. Framed as setups
+    worth investigating, never trade instructions. Deduped per symbol+side+day."""
+    from dk.briefing import radar
+    long_min = float(cfg.get("conviction_long_min", 35.0))
+    short_min = float(cfg.get("conviction_short_min", 24.0))
+    heat_min = float(cfg.get("conviction_scan_heat_min", 45.0))
+    n = 0
+
+    for s in radar.opportunity_spotlight(limit=10):
+        if s["conviction"] < long_min:
+            continue
+        owned = " (OWNED)" if s.get("owned") else ""
+        msg = (f"🎯 LONG setup converging: {s['symbol']}{owned} — "
+               f"conviction {s['conviction']:.0f}: {', '.join(s['reasons'])}")
+        n += _emit(c, s["symbol"], "CONVICTION_LONG", msg,
+                   {"conviction": s["conviction"], "score": s["score"],
+                    "rank": s["rank"], "reasons": s["reasons"],
+                    "url": s.get("catalyst_url"),
+                    "headline": s.get("catalyst_headline")})
+
+    for r in radar.watchlist_risks(limit=10):
+        if r["risk"] < short_min:
+            continue
+        owned = " (OWNED)" if r.get("owned") else ""
+        msg = (f"🎯 SHORT setup converging: {r['symbol']}{owned} — "
+               f"bear convergence {r['risk']:.0f}: {', '.join(r['reasons'])}")
+        n += _emit(c, r["symbol"], "CONVICTION_SHORT", msg,
+                   {"risk": r["risk"], "reasons": r["reasons"],
+                    "owned": r.get("owned", False)})
+
+    rows = c.execute(
+        """SELECT symbol, name, last_price, score, score_direction, notes
+           FROM candidates WHERE discovered_via='market_scan'
+             AND last_seen >= datetime('now', '-1 day')
+             AND score >= ? AND score_direction IN ('bull', 'bear')
+           ORDER BY score DESC LIMIT 5""",
+        (heat_min,),
+    ).fetchall()
+    for sym, name, price, heat, direction, notes in rows:
+        kind = "CONVICTION_LONG" if direction == "bull" else "CONVICTION_SHORT"
+        side = "LONG" if direction == "bull" else "SHORT"
+        msg = (f"🎯 {side} candidate off-watchlist: {sym} ({(name or sym)[:30]}) — "
+               f"market heat {heat:.0f}: {notes or 'movers scan'}")
+        n += _emit(c, sym, kind, msg,
+                   {"heat": heat, "direction": direction, "price": price,
+                    "notes": notes, "off_watchlist": True})
+    return n
+
+
 def _check_crypto(c, cfg: dict) -> int:
     move_pct = float(cfg.get("price_move_pct", 5.0))
     n = 0
@@ -259,6 +312,7 @@ def run() -> dict:
         counts["breaking_news"] = _check_breaking_news(c, cfg)
         counts["news_velocity"] = _check_news_velocity(c, cfg)
         counts["tech_signals"] = _check_technical_signals(c, cfg)
+        counts["conviction"] = _check_conviction(c, cfg)
         c.commit()
     counts["total_new"] = sum(counts.values())
     return counts
