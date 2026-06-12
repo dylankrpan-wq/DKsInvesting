@@ -96,7 +96,7 @@ brief:
   enabled: true
   hour_utc: 21               # generate on the first poll at/after this UTC hour (21:00 UTC ≈ just after US close)
   model: claude-opus-4-8     # cheaper options work too (e.g. claude-haiku-4-5 ≈ $0.02/day)
-  send_to_phone: false       # also push the brief through the Telegram/SMS channel below
+  send_to_phone: true        # also push the brief through the Telegram/SMS channel below
 
 # SMS phone alerts — which alert kinds count as "live events" worth a text,
 # and how many to include per digest text. Credentials live in secrets.env.
