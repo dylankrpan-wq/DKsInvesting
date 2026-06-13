@@ -57,13 +57,14 @@ def _sma(values: list[float], n: int) -> float | None:
     return sum(w) / len(w)
 
 
-def analyze(inst_id: str) -> dict | None:
+def analyze(inst_id: str, ticker: dict | None = None) -> dict | None:
     """Full structure analysis. Returns a JSON-safe dict, or None if the pair
-    has no data."""
+    has no data. Pass `ticker` (from fetch_tickers) to skip the per-pair ticker
+    fetch — the scanner uses this to save a call per candidate."""
     inst_id = inst_id.strip().upper()
     if "-" not in inst_id:
         inst_id = inst_id + "-USDT"   # bare base -> USDT perp
-    t = crypto_deriv.fetch_ticker(inst_id)
+    t = ticker or crypto_deriv.fetch_ticker(inst_id)
     if not t:
         return None
     h1 = crypto_deriv.fetch_candles(inst_id, "1H", 48)

@@ -2052,6 +2052,21 @@ with tab_crypto:
             st.markdown(_perp.claude_read(_a))
             st.caption(f"As of {_a.get('as_of_utc','')} UTC · grounded in live Blofin "
                        f"ticker / candles / funding. No order-book or OI data.")
+
+    # ---- Scanner: leverage-in-my-favor setups across all perps ----
+    st.markdown("##### 🎯 Scan all perps for setups")
+    st.caption("Find perps with leverage in your favor — a tight stop relative to the target "
+               "(high R:R, low risk %), ranked. Scans ~500 Blofin perps live; ~20-30s.")
+    _sc1, _sc2 = st.columns([1, 1])
+    _side = _sc1.selectbox("Side", ["both", "long", "short"], key="perp_scan_side",
+                           label_visibility="collapsed")
+    _scan = _sc2.button("Scan setups", key="perp_scan_go", use_container_width=True)
+    if _scan:
+        from dk.analysis import perp_scanner as _ps
+        with st.spinner("Scanning ~500 perps for the best-asymmetry setups…"):
+            _rows = _ps.scan(side=_side)
+        st.markdown(_ps.build_report(_rows))
+        st.caption("Discovery, not instructions — honor each setup's invalidation.")
     st.markdown("---")
 
     st.subheader("🪙 Crypto — top 25 by market cap")
