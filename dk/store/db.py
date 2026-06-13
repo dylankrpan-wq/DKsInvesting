@@ -243,6 +243,14 @@ CREATE TABLE IF NOT EXISTS crypto_prices (
     PRIMARY KEY (symbol, ts)
 );
 
+CREATE TABLE IF NOT EXISTS crypto_deriv_ticks (
+    inst_id TEXT NOT NULL,           -- e.g. 'BEAT-USDT' (Blofin perp)
+    ts TEXT NOT NULL,                -- UTC ISO, the fast-poll timestamp
+    last REAL,
+    PRIMARY KEY (inst_id, ts)
+);
+CREATE INDEX IF NOT EXISTS idx_deriv_ticks_ts ON crypto_deriv_ticks(ts);
+
 CREATE TABLE IF NOT EXISTS daily_briefs (
     brief_date TEXT PRIMARY KEY,         -- one row per market day (idempotent)
     generated_at TEXT DEFAULT CURRENT_TIMESTAMP,

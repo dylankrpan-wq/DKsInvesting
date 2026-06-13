@@ -14,11 +14,17 @@ If neither is configured, this is a silent no-op.
 from __future__ import annotations
 import json
 import sqlite3
+import threading
 from dk.config import DB_PATH, get_key, load_watchlist
+
+# Serializes push_digest across the in-process scheduler threads (the 15-min
+# poll job and the sub-minute crypto-spike job both call it), so they can't both
+# SELECT the same unsent rows and double-send before either marks them.
+_digest_lock = threading.Lock()
 
 # Alert kinds that count as "live events" worth a text. Tunable in watchlist.yaml.
 DEFAULT_LIVE_KINDS = [
-    "CONVICTION_LONG", "CONVICTION_SHORT",
+    "CONVICTION_LONG", "CONVICTION_SHORT", "CRYPTO_SPIKE",
     "HIGH_IMPACT_NEWS", "NEWS_VELOCITY", "PERSON_ACTIVITY", "EVENT_NEAR",
     "MACRO_NEAR", "EARNINGS_NEAR", "RANK_JUMP", "NEW_TOP", "TECH_SIGNAL",
 ]
@@ -206,7 +212,7 @@ def push_digest() -> dict:
     max_items = int(cfg.get("max_items_per_text", 5))
     placeholders = ",".join("?" * len(kinds))
 
-    with sqlite3.connect(DB_PATH) as c:
+    with _digest_lock, sqlite3.connect(DB_PATH) as c:
         c.row_factory = sqlite3.Row
         rows = c.execute(
             f"""SELECT id, symbol, kind, message FROM alerts
@@ -219,7 +225,7 @@ def push_digest() -> dict:
 
         # Rank by kind priority, dedupe by (symbol, kind)
         prio = {k: i for i, k in enumerate([
-            "CONVICTION_LONG", "CONVICTION_SHORT",
+            "CONVICTION_LONG", "CONVICTION_SHORT", "CRYPTO_SPIKE",
             "EVENT_NEAR", "PERSON_ACTIVITY", "HIGH_IMPACT_NEWS", "NEWS_VELOCITY",
             "MACRO_NEAR", "RANK_JUMP", "NEW_TOP", "EARNINGS_NEAR", "TECH_SIGNAL",
         ])}
@@ -244,8 +250,15 @@ def push_digest() -> dict:
 
         ok = _send(body)
         if ok:
-            ids = [r["id"] for r in rows]  # mark ALL matched (not just picked) as sent
+            # Mark sent only the rows whose (symbol, kind) we actually delivered
+            # (the picked items + their same-key dupes). Distinct alerts beyond
+            # the max_items cap stay unsent and go out next cycle, instead of
+            # being silently marked sent — important during a broad crypto pump
+            # when many pairs spike in one tick.
+            ids = [r["id"] for r in rows if (r["symbol"], r["kind"]) in seen_keys]
             c.executemany("UPDATE alerts SET sms_sent=1 WHERE id=?", [(i,) for i in ids])
             c.commit()
-            return {"configured": True, "sent": len(picked), "marked": len(ids)}
+            overflow = len(rows) - len(ids)
+            return {"configured": True, "sent": len(picked), "marked": len(ids),
+                    "deferred": overflow}
         return {"configured": True, "sent": 0, "error": "send failed"}

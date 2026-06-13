@@ -10,6 +10,9 @@ KIND_EMOJI = {
     "EARNINGS_NEAR": ":calendar_spiral:",
     "SENTIMENT_SURGE": ":newspaper:",
     "CRYPTO_MOVE": ":coin:",
+    "CRYPTO_SPIKE": ":rotating_light:",
+    "CONVICTION_LONG": ":dart:",
+    "CONVICTION_SHORT": ":dart:",
 }
 
 

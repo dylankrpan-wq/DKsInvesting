@@ -29,6 +29,7 @@ KIND_META = {
     "EVENT_NEAR":       ("Catalyst Ahead", "📣", "A known market event is imminent."),
     "MACRO_NEAR":       ("Macro", "🌐", "Macro event that can move the whole market."),
     "CRYPTO_MOVE":      ("Crypto Mover", "🪙", "Notable crypto move in the last 24h."),
+    "CRYPTO_SPIKE":     ("Crypto Spike", "🚨", "A derivatives pair just spiked hard in minutes — fast, often short-lived."),
     "CUSTOM":           ("Your Trigger", "🔔", "A custom alert you set has fired."),
     "TECH_SIGNAL":      ("Technical", "📐", "A technical indicator just fired (RSI/MACD/cross/breakout)."),
 }
@@ -37,6 +38,7 @@ KIND_META = {
 KIND_PRIORITY = {
     "CONVICTION_LONG": 90,
     "CONVICTION_SHORT": 90,
+    "CRYPTO_SPIKE": 89,
     "HIGH_IMPACT_NEWS": 88,
     "PERSON_ACTIVITY": 86,
     "NEWS_VELOCITY": 84,

@@ -94,6 +94,22 @@ notifications:
 branding:
   signature: "DK Investing™"
 
+# 🚨 Crypto-derivatives spike alerts — a sub-minute loop over ALL Blofin perp
+# pairs (no API key needed) that texts you instantly when a pair moves sharply
+# in a short window (the BEAT-USDT / TRUMP-USDT style fast pump). Separate from
+# the 24h CRYPTO_MOVE alert. Requires the scheduler running.
+crypto_spike:
+  enabled: true
+  interval_seconds: 90       # how often to snapshot all perps (floor 30s)
+  inst_type: SWAP            # Blofin perpetual swaps
+  windows:                   # alert if |move| >= pct within minutes
+    - {minutes: 3, pct: 6}
+    - {minutes: 10, pct: 12}
+  retention_minutes: 15      # rolling tick history kept per pair
+  min_quote_vol_usd: 100000  # skip illiquid pairs (24h USD turnover floor)
+  cooldown_minutes: 30       # don't re-alert the same pair within this
+  direction: both            # up | down | both (pumps and dumps)
+
 # 📊 Hourly pulse — a consolidated activity summary texted at the top of each
 # hour, 24/7, but ONLY when the prior hour had notable activity (conviction
 # setups, movers, breaking news, crypto moves, rank changes). Quiet hours stay
@@ -126,6 +142,7 @@ sms:
   live_kinds:
     - CONVICTION_LONG
     - CONVICTION_SHORT
+    - CRYPTO_SPIKE
     - HIGH_IMPACT_NEWS
     - NEWS_VELOCITY
     - PERSON_ACTIVITY

@@ -37,6 +37,25 @@ def _hourly_job():
         print(f"  !! hourly pulse failed: {e}")
 
 
+def _crypto_spike_job():
+    """Fast crypto-derivatives spike check (sub-minute); alerts on short pumps."""
+    try:
+        from dk.jobs import crypto_spike
+        res = crypto_spike.run_once()
+        if res.get("alerts"):
+            print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] crypto spike -> {res}")
+    except Exception as e:
+        print(f"  !! crypto spike failed: {e}")
+
+
+def _spike_interval() -> int:
+    try:
+        from dk.jobs import crypto_spike
+        return max(30, crypto_spike.interval_seconds())  # floor 30s to be polite
+    except Exception:
+        return 90
+
+
 _BG_SCHED = None
 
 
@@ -61,10 +80,14 @@ def start_background_scheduler(run_now: bool = True):
     sched.add_job(_hourly_job, CronTrigger(minute=0),
                   id="hourly_pulse", max_instances=1, coalesce=True,
                   misfire_grace_time=300)
+    # Fast crypto-derivatives spike check (sub-minute).
+    spike_s = _spike_interval()
+    sched.add_job(_crypto_spike_job, IntervalTrigger(seconds=spike_s),
+                  id="crypto_spike", max_instances=1, coalesce=True)
     sched.start()
     _BG_SCHED = sched
     print(f"[scheduler] in-process scheduler started "
-          f"({POLL_MINUTES} min poll + hourly pulse)")
+          f"({POLL_MINUTES} min poll + hourly pulse + {spike_s}s crypto spike)")
     return sched
 
 
@@ -105,8 +128,12 @@ def main():
     sched.add_job(_job, IntervalTrigger(minutes=POLL_MINUTES), id="poll", next_run_time=datetime.now())
     sched.add_job(_hourly_job, CronTrigger(minute=0), id="hourly_pulse",
                   max_instances=1, coalesce=True, misfire_grace_time=300)
+    spike_s = _spike_interval()
+    sched.add_job(_crypto_spike_job, IntervalTrigger(seconds=spike_s),
+                  id="crypto_spike", max_instances=1, coalesce=True)
     sched.start()
-    print(f"DK scheduler running every {POLL_MINUTES} min + hourly pulse. Ctrl+C to stop.")
+    print(f"DK scheduler running every {POLL_MINUTES} min + hourly pulse "
+          f"+ {spike_s}s crypto spike. Ctrl+C to stop.")
 
     stop = False
     def handle(sig, frame):

@@ -37,6 +37,7 @@ _KIND_FMT = {
     "NEWS_VELOCITY":    ("📡", "Live events", 3),
     "PRICE_MOVE":       ("💥", "Movers", 6),
     "VOLUME_SPIKE":     ("🔊", "Volume spikes", 4),
+    "CRYPTO_SPIKE":     ("🚨", "Crypto spikes", 5),
     "CRYPTO_MOVE":      ("🪙", "Crypto", 4),
     "RANK_JUMP":        ("🚀", "Rank jumps", 4),
     "NEW_TOP":          ("⭐", "New top-5", 4),
@@ -47,9 +48,9 @@ _KIND_FMT = {
 }
 # Order pulse sections by importance (conviction first, context last).
 _KIND_ORDER = [
-    "CONVICTION_LONG", "CONVICTION_SHORT", "HIGH_IMPACT_NEWS", "NEWS_VELOCITY",
-    "PRICE_MOVE", "VOLUME_SPIKE", "CRYPTO_MOVE", "RANK_JUMP", "NEW_TOP",
-    "SCORE_SURGE", "PERSON_ACTIVITY", "EVENT_NEAR", "TECH_SIGNAL",
+    "CONVICTION_LONG", "CONVICTION_SHORT", "CRYPTO_SPIKE", "HIGH_IMPACT_NEWS",
+    "NEWS_VELOCITY", "PRICE_MOVE", "VOLUME_SPIKE", "CRYPTO_MOVE", "RANK_JUMP",
+    "NEW_TOP", "SCORE_SURGE", "PERSON_ACTIVITY", "EVENT_NEAR", "TECH_SIGNAL",
 ]
 
 
