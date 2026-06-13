@@ -1,0 +1,12 @@
+# Railway/nixpacks build config.
+#
+# Installs Chromium so kaleido 1.x (via choreographer) can render the perp setup
+# charts to PNG for the Telegram photo pushes. choreographer auto-detects
+# /usr/bin/chromium and already launches it with --no-sandbox and
+# --disable-dev-shm-usage (the usual container blockers), so no env vars or code
+# changes are needed — just the binary + fonts for text rendering.
+#
+# Without this, chart_png() returns None and setups fall back to text alerts
+# (no breakage) — this is what upgrades Railway to actually send the chart images.
+[phases.setup]
+aptPkgs = ["chromium", "fonts-liberation", "fonts-dejavu-core"]

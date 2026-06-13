@@ -35,7 +35,10 @@ the main reason to deploy here vs. running `start_scheduler.bat` on your PC.
 1. Click **New Project** → **Deploy from GitHub repo**
 2. Authorize Railway to see your repos, pick **`dylankrpan-wq/DKsInvesting`**
 3. Railway auto-detects Python (via `requirements.txt` + `.python-version`) and
-   reads `railway.json` for the start command. First build takes ~3-5 min.
+   reads `railway.json` for the start command. `nixpacks.toml` also installs
+   Chromium so the perp setup **charts render as Telegram photos** (without it
+   they'd fall back to text). First build takes ~3-5 min — watch the log for the
+   chromium + statsmodels/scipy installs.
 
 ### 3. Add a persistent volume (so data never resets)
 1. In your service → **Settings** (or **Volumes** tab) → **+ New Volume**

@@ -13,6 +13,7 @@ data exists here, so the reads say so.
 """
 from __future__ import annotations
 from datetime import datetime, timezone
+from dk.config import load_watchlist
 from dk.sources import crypto_deriv
 from dk import llm
 
@@ -57,6 +58,22 @@ def _sma(values: list[float], n: int) -> float | None:
     return sum(w) / len(w)
 
 
+def _atr(candles: list[dict], n: int = 14) -> float | None:
+    """Average True Range over the last n candles (volatility for stop sizing)."""
+    if len(candles) < 2:
+        return None
+    trs = []
+    for i in range(1, len(candles)):
+        h, lo, pc = candles[i]["high"], candles[i]["low"], candles[i - 1]["close"]
+        trs.append(max(h - lo, abs(h - pc), abs(lo - pc)))
+    w = trs[-n:] if len(trs) >= n else trs
+    return sum(w) / len(w) if w else None
+
+
+def _stop_atr_mult() -> float:
+    return float((load_watchlist().get("perp") or {}).get("stop_atr_mult", 0.5))
+
+
 def analyze(inst_id: str, ticker: dict | None = None) -> dict | None:
     """Full structure analysis. Returns a JSON-safe dict, or None if the pair
     has no data. Pass `ticker` (from fetch_tickers) to skip the per-pair ticker
@@ -99,6 +116,9 @@ def analyze(inst_id: str, ticker: dict | None = None) -> dict | None:
         ma20 = _sma(closes, 20)
         a["ma20_1h"] = round(ma20, 6) if ma20 else None
         a["vs_ma_pct"] = round(_pct(last, ma20), 1) if ma20 else None
+        atr = _atr(h1, 14)
+        a["atr_1h"] = round(atr, 6) if atr else None
+        a["atr_pct"] = round(atr / last * 100, 1) if atr and last else None
 
     # 15m micro structure (last ~8 bars = 2h for the working range)
     if m15:
@@ -136,8 +156,21 @@ def analyze(inst_id: str, ticker: dict | None = None) -> dict | None:
     sup = ll or t["low24h"]
     low24 = t["low24h"]
     ma = a.get("ma20_1h")
+    atr = a.get("atr_1h")
+    mult = _stop_atr_mult()
+    # Stop sits beyond the structural level by a VOLATILITY buffer (>= mult*ATR),
+    # not a flat 0.5% — the scorecard showed flat stops getting wicked on noise
+    # (e.g. BEAT ran +5.6% then round-tripped to a 1.6% stop). Tunable via
+    # config perp.stop_atr_mult (0 = old flat behavior). Falls back to 0.5% if
+    # no ATR. Wider stop -> lower R:R, which the scorecard then A/Bs over time.
+    def _short_buf(level):
+        return max(level * 0.005, mult * atr) if atr else level * 0.005
+
+    def _long_buf(level):
+        return max(level * 0.005, mult * atr) if atr else level * 0.005
+
     if res and sup and res > last > 0:
-        short_stop = res * 1.005
+        short_stop = res + _short_buf(res)
         # profit-side levels for a short, nearest→far: recent range low, 16-bar
         # low, MA (if below), 24h low. _setup filters/sorts/dedups + R-fills.
         a["short"] = _setup(last, short_stop,
@@ -147,7 +180,7 @@ def analyze(inst_id: str, ticker: dict | None = None) -> dict | None:
     # live price on a fresh breakdown, the long stop lands ABOVE entry — an
     # inverted, nonsensical risk that also breaks the tracker's TP/stop logic.
     if sup and res and sup < last:
-        long_stop = sup * 0.995
+        long_stop = sup - _long_buf(sup)
         a["long"] = _setup(last, long_stop,
                            [a.get("range_hi"), lh, ma, a.get("peak_1h"), t["high24h"]],
                            "long")
@@ -245,6 +278,8 @@ def template_read(a: dict) -> str:
     if a.get("ma20_1h"):
         side = "above" if (a.get("vs_ma_pct") or 0) >= 0 else "below"
         L.append(f"- price {side} the 1H MA(20) ${_fmt(a['ma20_1h'])} ({a.get('vs_ma_pct'):+}%)")
+    if a.get("atr_pct") is not None:
+        L.append(f"- 1H ATR {a['atr_pct']}% of price (drives the stop buffer)")
     if a.get("funding_pct") is not None:
         L.append(f"- funding {a['funding_pct']:+}% ({a['funding_side']})")
 

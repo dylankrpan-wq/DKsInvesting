@@ -110,6 +110,14 @@ crypto_spike:
   cooldown_minutes: 30       # don't re-alert the same pair within this
   direction: both            # up | down | both (pumps and dumps)
 
+# Perp setup math. stop_atr_mult places the stop a volatility buffer (this ×
+# 1H ATR) beyond the structural level instead of a flat 0.5%, so normal wicks
+# past support/resistance don't stop you out before the move works. The call-out
+# scorecard A/Bs this over time (new setups use the new value; resolved ones
+# freeze). 0 = old flat-0.5% behavior; ~0.5–1.0 = progressively wider.
+perp:
+  stop_atr_mult: 0.5
+
 # 📊 Perp setup tracker — follows each pushed SETUP_SCAN setup against its
 # entry/stop/TP1/2/3 and pings the phone the moment it touches a TP rung or its
 # stop (laddering TP1→TP2→TP3, closing on stop or TP3), plus an hourly "how the
