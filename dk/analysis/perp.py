@@ -134,13 +134,19 @@ def analyze(inst_id: str, ticker: dict | None = None) -> dict | None:
     res = lh or t["high24h"]
     sup = ll or t["low24h"]
     low24 = t["low24h"]
+    ma = a.get("ma20_1h")
     if res and sup and res > last > 0:
         short_stop = res * 1.005
-        a["short"] = _setup(last, short_stop, [sup, low24], "short")
+        # profit-side levels for a short, nearest→far: recent range low, 16-bar
+        # low, MA (if below), 24h low. _setup filters/sorts/dedups + R-fills.
+        a["short"] = _setup(last, short_stop,
+                            [a.get("range_lo"), ll, ma, low24], "short")
         a["invalidation_short"] = f"close/hold above ${_fmt(res)}"
     if sup and res:
         long_stop = sup * 0.995
-        a["long"] = _setup(last, long_stop, [res, a.get("peak_1h")], "long")
+        a["long"] = _setup(last, long_stop,
+                           [a.get("range_hi"), lh, ma, a.get("peak_1h"), t["high24h"]],
+                           "long")
         a["invalidation_long"] = f"close/hold below ${_fmt(sup)}"
 
     a["caveats"] = [
@@ -151,26 +157,65 @@ def analyze(inst_id: str, ticker: dict | None = None) -> dict | None:
     return a
 
 
-def _setup(entry: float, stop: float, targets: list, side: str) -> dict:
+_FILL_STEP_R = 1.5  # min R spacing for ladder rungs filled past structural levels
+
+
+def _setup(entry: float, stop: float, levels: list, side: str) -> dict:
+    """Build a 3-rung take-profit ladder (TP1/TP2/TP3). Rungs are real
+    structural levels on the profit side, nearest first; if fewer than 3
+    distinct levels exist, the rest are filled at fixed R-multiples beyond the
+    last one. Each rung carries its R-multiple (reward/risk) and basis."""
     risk = abs(stop - entry)
     risk_pct = round(risk / entry * 100, 1) if entry else None
-    # Keep only targets on the profitable side (below for a short, above for a
-    # long) so R:R is always meaningful even if price already broke its level.
+    out = {"entry": round(entry, 6), "stop": round(stop, 6), "risk_pct": risk_pct}
+    if not entry or risk <= 0:
+        out["tps"] = []
+        return out
+
+    # Structural candidates on the profit side, nearest-first, deduped ~0.4%
     if side == "short":
-        tgts = sorted([x for x in targets if x and x < entry], reverse=True)
+        cands = sorted([x for x in levels if x and x < entry], reverse=True)
     else:
-        tgts = sorted([x for x in targets if x and x > entry])
-    out = {"entry": round(entry, 6), "stop": round(stop, 6), "risk_pct": risk_pct,
-           "targets": [round(x, 6) for x in tgts]}
-    if tgts and risk > 0:
-        t1 = tgts[0]
-        reward = abs(entry - t1)
-        out["reward1_pct"] = round(reward / entry * 100, 1)
-        out["rr1"] = round(reward / risk, 1)
+        cands = sorted([x for x in levels if x and x > entry])
+    struct: list[float] = []
+    for x in cands:
+        if not struct or abs(x - struct[-1]) / entry > 0.004:
+            struct.append(x)
+
+    def _rung(level: float, basis: str) -> dict:
+        r = abs(entry - level) / risk
+        return {"level": round(level, 6), "r": round(r, 1),
+                "pct": round((level - entry) / entry * 100, 1), "basis": basis}
+
+    tps = [_rung(x, "structure") for x in struct[:3]]
+    # Fill to 3 rungs at R-multiples stepping >= _FILL_STEP_R beyond the last,
+    # so filled rungs are always meaningfully spaced (not piled on a structural one).
+    last_r = tps[-1]["r"] if tps else 0.0
+    while len(tps) < 3:
+        last_r += _FILL_STEP_R
+        lvl = entry - last_r * risk if side == "short" else entry + last_r * risk
+        if lvl <= 0:
+            break
+        tps.append(_rung(lvl, "R-mult"))
+
+    out["tps"] = tps
+    if tps:
+        out["rr1"] = tps[0]["r"]  # ranking still keys on the first target
     return out
 
 
 # ---- reads -------------------------------------------------------------
+
+def _tp_line(tps: list) -> str:
+    """Render TP1/TP2/TP3 with R-multiple and basis."""
+    parts = []
+    for i, tp in enumerate(tps, 1):
+        star = "*" if tp["basis"] == "R-mult" else ""
+        parts.append(f"TP{i} ${_fmt(tp['level'])} ({tp['r']}R{star})")
+    tail = "  _(*=R-multiple, no structural level that far)_" if any(
+        tp["basis"] == "R-mult" for tp in tps) else ""
+    return "  - " + " · ".join(parts) + tail
+
 
 def template_read(a: dict) -> str:
     """Deterministic, grounded markdown read (free, instant; alert + fallback)."""
@@ -198,22 +243,16 @@ def template_read(a: dict) -> str:
         L.append(f"- funding {a['funding_pct']:+}% ({a['funding_side']})")
 
     s = a.get("short")
-    if s:
-        line = (f"**Short setup:** enter ${_fmt(s['entry'])}, stop ${_fmt(s['stop'])} "
-                f"(risk {s.get('risk_pct')}%), targets "
-                + " → ".join(f"${_fmt(x)}" for x in s["targets"]))
-        if s.get("rr1"):
-            line += f"  · R:R ~{s['rr1']}:1 to first target"
-        L.append(line)
+    if s and s.get("tps"):
+        L.append(f"**Short setup:** enter ${_fmt(s['entry'])}, stop ${_fmt(s['stop'])} "
+                 f"(risk {s.get('risk_pct')}%)")
+        L.append(_tp_line(s["tps"]))
         L.append(f"  - invalidation: {a.get('invalidation_short')}")
     lg = a.get("long")
-    if lg:
-        line = (f"**Long setup:** enter ${_fmt(lg['entry'])}, stop ${_fmt(lg['stop'])} "
-                f"(risk {lg.get('risk_pct')}%), targets "
-                + " → ".join(f"${_fmt(x)}" for x in lg["targets"]))
-        if lg.get("rr1"):
-            line += f"  · R:R ~{lg['rr1']}:1 to first target"
-        L.append(line)
+    if lg and lg.get("tps"):
+        L.append(f"**Long setup:** enter ${_fmt(lg['entry'])}, stop ${_fmt(lg['stop'])} "
+                 f"(risk {lg.get('risk_pct')}%)")
+        L.append(_tp_line(lg["tps"]))
         L.append(f"  - invalidation: {a.get('invalidation_long')}")
 
     L.append("_Caveats: " + "; ".join(a.get("caveats", [])) + "._")
@@ -226,7 +265,8 @@ Rules:
 - Use ONLY numbers present in the JSON. Never invent a price, level, or metric. Describe prices as the measured value.
 - Frame as opportunity discovery: give BOTH the long and short case with their explicit invalidation levels. Never issue a single prescriptive "do this" instruction.
 - You have NO order-book depth, open interest, or IV — say so if it matters. This is a low-float perp on leverage; flag squeeze/liquidation risk.
-- Be concise and concrete (~180 words). Lead with the structure in one line, then the key levels, then the cleaner of the two setups and what would flip it. End with the single most important thing to watch.
+- Each setup carries a 3-rung take-profit ladder (tps: TP1/TP2/TP3) — quote all three with their R-multiples (the `r` field). Rungs marked basis "R-mult" are R-multiple extensions (no structural level that far), not measured S/R — say so. Rungs marked "structure" are real levels.
+- Be concise and concrete (~200 words). Lead with the structure in one line, then the key levels, then the cleaner of the two setups with its full TP ladder and what would flip it. End with the single most important thing to watch.
 - No hype, no emoji. Plain, direct."""
 
 

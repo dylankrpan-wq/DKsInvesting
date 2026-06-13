@@ -72,7 +72,7 @@ def scan(top_n: int = 10, max_deep: int = 25, min_vol_usd: float = 300_000,
         out.append({
             "inst_id": a["inst_id"], "side": sd, "rr1": s["rr1"],
             "risk_pct": s["risk_pct"], "entry": s["entry"], "stop": s["stop"],
-            "target1": s["targets"][0] if s.get("targets") else None,
+            "tps": s.get("tps", []),
             "phase": a.get("phase"), "micro_pos": a.get("micro_pos"),
             "chg_24h_pct": a.get("chg_24h_pct"), "off_high_pct": a.get("off_high_pct"),
             "funding_pct": fund, "funding_tailwind": tailwind,
@@ -88,20 +88,27 @@ def build_report(rows: list[dict]) -> str:
     if not rows:
         return ("No setups clear the bar right now (tight stop + good R:R on a "
                 "liquid, volatile perp). The market may be mid-range — check back.")
+    from dk.analysis.perp import _fmt
+
+    def _tp(r, i):
+        tps = r.get("tps") or []
+        return f"${_fmt(tps[i]['level'])} ({tps[i]['r']}R)" if i < len(tps) else "—"
+
     L = ["**Leverage-in-my-favor scan** — tight stop relative to target, ranked by R:R.",
          "Discovery, not instructions. Each is a setup to investigate; honor the invalidation.",
          "",
-         "| Pair | Side | R:R | Risk | Entry | Stop | Target | Why |",
-         "|------|------|----:|-----:|------|------|--------|-----|"]
+         "| Pair | Side | Risk | Entry | Stop | TP1 | TP2 | TP3 | Why |",
+         "|------|------|-----:|------|------|-----|-----|-----|-----|"]
     for r in rows:
-        from dk.analysis.perp import _fmt
         tw = " ⚡fund" if r["funding_tailwind"] else ""
-        why = f"{r.get('phase','')}, {r.get('micro_pos','')}{tw}"
-        L.append(f"| {r['inst_id']} | {r['side']} | {r['rr1']}:1 | {r['risk_pct']}% | "
-                 f"${_fmt(r['entry'])} | ${_fmt(r['stop'])} | ${_fmt(r['target1'])} | {why} |")
-    L += ["", "_⚡fund = funding pays your side. Low-float perps — manipulation/liquidation "
-          "risk on leverage; no order-book/OI/IV in this data. Invalidation is per-setup: "
-          "close/hold past the stop level._"]
+        why = f"{r.get('phase','')}{tw}"
+        L.append(f"| {r['inst_id']} | {r['side']} | {r['risk_pct']}% | "
+                 f"${_fmt(r['entry'])} | ${_fmt(r['stop'])} | "
+                 f"{_tp(r,0)} | {_tp(r,1)} | {_tp(r,2)} | {why} |")
+    L += ["", "_TPs are structural levels on the profit side (R = reward/risk multiple); "
+          "where no structural level exists that far, the rung is an R-multiple extension. "
+          "⚡fund = funding pays your side. Low-float perps — manipulation/liquidation risk on "
+          "leverage; no order-book/OI/IV here. Invalidation per-setup: close/hold past the stop._"]
     return "\n".join(L)
 
 
@@ -142,9 +149,11 @@ def scan_and_alert(push: bool = True) -> dict:
                 continue
             arrow = "🟢" if r["side"] == "long" else "🔴"
             tw = " ⚡fund" if r["funding_tailwind"] else ""
+            tps = r.get("tps") or []
+            tp_str = " / ".join(f"${_fmt_p(tp['level'])}" for tp in tps) or "—"
             msg = (f"🎯 {arrow} {r['side'].upper()} {r['inst_id']} {r['rr1']}:1 "
                    f"(risk {r['risk_pct']}%) — entry ${_fmt_p(r['entry'])}, "
-                   f"stop ${_fmt_p(r['stop'])}, tgt ${_fmt_p(r['target1'])}{tw}")
+                   f"stop ${_fmt_p(r['stop'])}, TP1/2/3 {tp_str}{tw}")
             c.execute(
                 "INSERT INTO alerts (symbol, kind, message, payload) VALUES (?,?,?,?)",
                 (r["inst_id"], "SETUP_SCAN", msg, json.dumps(r)))
