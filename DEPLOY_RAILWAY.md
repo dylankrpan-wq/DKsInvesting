@@ -1,8 +1,19 @@
 # Deploying DK Investing to Railway ($5/mo, 24/7, auto-updating)
 
-Railway runs the app **always-on** with a **persistent database** and a
-**built-in 15-minute scheduler** — no manual refresh, data survives restarts,
-and none of the Streamlit Cloud blank-screen / websocket issues.
+Railway runs the app **always-on** with a **persistent database** and the
+**full background scheduler** — no manual refresh, data survives restarts, every
+loop runs 24/7, and a `git push` auto-redeploys (no more closing/reopening the
+scheduler window to pick up new code).
+
+When `DK_INPROCESS_SCHEDULER=1`, the single Railway service runs all of it:
+- **15-min poll** (prices, news, sentiment, scores, alerts)
+- **~90-second crypto-derivatives spike loop** (Blofin perps → instant pump/dump alerts)
+- **perp setup tracker** (follows pushed setups to TP/stop, pings progress)
+- **hourly pulse** + **hourly perp setup scan** (top leverage-in-favor setups → phone)
+- **event-triggered stock thesis pushes** + the **daily desk brief**
+
+All of these need the scheduler running, which on Railway it always is — that's
+the main reason to deploy here vs. running `start_scheduler.bat` on your PC.
 
 ## What you get vs Streamlit Cloud
 
@@ -36,13 +47,22 @@ In your service → **Variables** → add:
 
 | Variable | Value | Why |
 |---|---|---|
-| `DK_DATA_DIR` | `/data` | Put the SQLite DB on the persistent volume |
-| `DK_INPROCESS_SCHEDULER` | `1` | Run the 15-min poller inside the app |
+| `DK_DATA_DIR` | `/data` | Put the SQLite DB (history, open perp signals, dedup state) on the persistent volume |
+| `DK_INPROCESS_SCHEDULER` | `1` | Run all the background loops inside the app |
 | `POLL_MINUTES` | `15` | Poll interval (optional; defaults to 15) |
 
-Add any API keys you use the same way (same names as `config/secrets.env`):
-`NEWSAPI_KEY`, `FINNHUB_KEY`, `ANTHROPIC_API_KEY`, `DISCORD_WEBHOOK_URL`,
-broker keys, etc. Railway encrypts these.
+**Essential for the phone pushes** (copy the values from your local `config/secrets.env`):
+
+| Variable | Why |
+|---|---|
+| `ANTHROPIC_API_KEY` | Claude-written desk brief, thesis notes, perp reads |
+| `TELEGRAM_BOT_TOKEN` | Your bot token (the alerts/brief/thesis/scanner all push here) |
+| `TELEGRAM_CHAT_ID` | Your numeric chat id (the bot can't message you without it) |
+
+Add any other keys you use the same way (same names as `config/secrets.env`):
+`FINNHUB_KEY`, `NEWSAPI_KEY`, `FMP_API_KEY`, `DISCORD_WEBHOOK_URL`, broker keys
+(`BLOFIN_*`, etc.). Railway encrypts these. The crypto-derivatives data (spike
+loop, perp scanner/tracker) uses Blofin's **public** endpoint and needs no key.
 
 ### 5. Generate a public URL
 1. Service → **Settings** → **Networking** → **Generate Domain**
