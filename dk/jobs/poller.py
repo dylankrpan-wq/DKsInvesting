@@ -219,6 +219,15 @@ def _run_once_impl() -> dict:
         print(f"[sms] {e}")
         summary["sms"] = {"error": str(e)}
 
+    # Event-triggered stock thesis pushes — names with a setup forming get a
+    # concise forward-looking note to the phone (per-name cooldown, per-cycle cap)
+    try:
+        from dk.thesis import push as thesis_push
+        summary["thesis_push"] = thesis_push.push_theses()
+    except Exception as e:
+        print(f"[thesis_push] {e}")
+        summary["thesis_push"] = {"error": str(e)}
+
     # Daily desk brief — Claude-written synthesis, once per market day after
     # the configured UTC hour (no-op without ANTHROPIC_API_KEY)
     try:

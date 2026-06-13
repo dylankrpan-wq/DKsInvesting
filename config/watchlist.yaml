@@ -110,6 +110,19 @@ crypto_spike:
   cooldown_minutes: 30       # don't re-alert the same pair within this
   direction: both            # up | down | both (pumps and dumps)
 
+# 📋 Stock thesis pushes — event-triggered. When a watchlist or discovered name
+# forms a setup (bullish/bearish convergence, or a high-heat market-scan mover),
+# a concise forward-looking thesis note (chart + momentum + catalyst) is texted
+# to Telegram. Per-name cooldown + per-cycle cap. Runs in the poll cycle, so it
+# needs the scheduler running and ANTHROPIC_API_KEY for the written note.
+thesis_push:
+  enabled: true
+  max_per_cycle: 2           # most thesis notes to push per poll cycle
+  cooldown_hours: 12         # don't re-push the same stock within this window
+  include_discovered: true   # also cover off-watchlist market-scan movers
+  scan_heat_min: 40          # min market-scan heat for a discovered name to qualify
+  model: claude-opus-4-8     # cheaper models work too (e.g. claude-haiku-4-5)
+
 # 🎯 Scheduled perp setup scan — hourly, ranks all Blofin perps for "leverage in
 # my favor" setups (tight stop vs target) and texts the top 1-2 standouts. Higher
 # quality bar than the manual dashboard scan. Requires the scheduler running.

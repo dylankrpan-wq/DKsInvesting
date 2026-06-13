@@ -14,6 +14,7 @@ KIND_EMOJI = {
     "CONVICTION_LONG": ":dart:",
     "CONVICTION_SHORT": ":dart:",
     "SETUP_SCAN": ":dart:",
+    "THESIS": ":clipboard:",
 }
 
 

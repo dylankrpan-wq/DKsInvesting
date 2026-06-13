@@ -15,6 +15,7 @@ from dk.config import DB_PATH, equity_symbols
 # alert kind -> (category, icon, why-it-matters template)
 KIND_META = {
     "SETUP_SCAN":       ("Setup Scan", "🎯", "A high-R:R defined-risk perp setup the scanner surfaced — tight stop vs target."),
+    "THESIS":           ("Stock Thesis", "📋", "A forward-looking thesis on a stock with a setup forming — chart + momentum + catalyst."),
     "CONVICTION_LONG":  ("Conviction", "🎯", "Multiple bullish signals converging hard — the strongest long-side setup the system sees."),
     "CONVICTION_SHORT": ("Conviction", "🎯", "Multiple bearish signals converging hard — the strongest short-side setup the system sees."),
     "HIGH_IMPACT_NEWS": ("Breaking", "⚡", "High-impact headline just dropped — these move stocks fast."),
@@ -41,6 +42,7 @@ KIND_PRIORITY = {
     "CONVICTION_SHORT": 90,
     "CRYPTO_SPIKE": 89,
     "SETUP_SCAN": 83,
+    "THESIS": 76,
     "HIGH_IMPACT_NEWS": 88,
     "PERSON_ACTIVITY": 86,
     "NEWS_VELOCITY": 84,
