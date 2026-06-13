@@ -2032,6 +2032,28 @@ with tab_calendar:
         st.dataframe(ipos, use_container_width=True, hide_index=True)
 
 with tab_crypto:
+    # ---- On-demand perp structure analysis (any Blofin pair) ----
+    st.subheader("🔍 Perp analysis — any Blofin pair")
+    st.caption("Type a perpetual (e.g. BEAT-USDT, TRUMP-USDT, or just BTC) for a live "
+               "structure read: phase, key levels, the range, funding, and defined-risk "
+               "long/short framing with invalidation. Grounded in live data — discovery, "
+               "not a trade instruction.")
+    _pc1, _pc2 = st.columns([3, 1])
+    _pair = _pc1.text_input("Pair", value="BEAT-USDT", key="perp_pair",
+                            label_visibility="collapsed")
+    _go = _pc2.button("Analyze", key="perp_go", use_container_width=True)
+    if _go and _pair.strip():
+        from dk.analysis import perp as _perp
+        with st.spinner(f"Reading {_pair.strip().upper()} structure…"):
+            _a = _perp.analyze(_pair)
+        if not _a:
+            st.warning(f"No Blofin perp data for '{_pair}'. Check the symbol (e.g. BEAT-USDT).")
+        else:
+            st.markdown(_perp.claude_read(_a))
+            st.caption(f"As of {_a.get('as_of_utc','')} UTC · grounded in live Blofin "
+                       f"ticker / candles / funding. No order-book or OI data.")
+    st.markdown("---")
+
     st.subheader("🪙 Crypto — top 25 by market cap")
     from dk.sources import leaderboards as _lbc
 

@@ -15,6 +15,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from dk.config import load_watchlist
 from dk.sources import crypto_deriv
+from dk.analysis import perp
 from dk.store import db as store
 
 # Defaults (overridable in config/watchlist.yaml -> crypto_spike)
@@ -31,16 +32,6 @@ def _cfg() -> dict:
 
 def interval_seconds() -> int:
     return int(_cfg().get("interval_seconds", 90))
-
-
-def _fmt_price(p: float) -> str:
-    """Readable price across magnitudes — meme perps are sub-cent, so avoid the
-    scientific notation a plain '%g' would produce."""
-    if p >= 1000:
-        return f"{p:,.2f}"
-    if p >= 1:
-        return f"{p:,.4f}".rstrip("0").rstrip(".")
-    return f"{p:.8f}".rstrip("0").rstrip(".")  # sub-$1: fixed, trimmed
 
 
 def run_once(push: bool = True) -> dict:
@@ -122,16 +113,16 @@ def run_once(push: bool = True) -> dict:
 
             pct, wmin, then_price = best
             arrow = "🟢 PUMP" if pct > 0 else "🔴 DUMP"
-            chg24 = t.get("chg_24h_pct")
-            chg24_s = f", {chg24:+.1f}% 24h" if chg24 is not None else ""
-            msg = (f"{arrow} {inst_id} {pct:+.1f}% in {wmin}m "
-                   f"(now ${_fmt_price(t['last'])}{chg24_s}) — fast derivatives move")
+            # Staple a lightweight structure read onto the alert (no extra API
+            # call — built from the ticker fields already in hand).
+            compact = perp.compact_from_ticker(t)
+            msg = f"{arrow} {inst_id} {pct:+.1f}% in {wmin}m — {compact}"
             c.execute(
                 "INSERT INTO alerts (symbol, kind, message, payload) VALUES (?,?,?,?)",
                 (inst_id, "CRYPTO_SPIKE", msg,
                  json.dumps({"inst_id": inst_id, "pct": round(pct, 2),
                              "window_min": wmin, "price": t["last"],
-                             "chg_24h_pct": chg24,
+                             "chg_24h_pct": t.get("chg_24h_pct"),
                              "quote_vol_usd": round(t["quote_vol_usd"])})),
             )
             new_alerts += 1
