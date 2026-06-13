@@ -99,6 +99,44 @@ def _send_telegram(body: str) -> bool:
         return False
 
 
+def _send_telegram_photo(image: bytes, caption: str = "") -> bool:
+    token = get_key("TELEGRAM_BOT_TOKEN")
+    chat_id = get_key("TELEGRAM_CHAT_ID")
+    if not (token and chat_id):
+        return False
+    try:
+        import requests
+        r = requests.post(
+            f"https://api.telegram.org/bot{token}/sendPhoto",
+            data={"chat_id": chat_id, "caption": caption[:1024]},
+            files={"photo": ("chart.png", image, "image/png")},
+            timeout=30,
+        )
+        if r.status_code == 200:
+            return True
+        print(f"[telegram] sendPhoto HTTP {r.status_code}: {r.text[:200]}")
+        return False
+    except Exception as e:
+        print(f"[telegram] sendPhoto {e}")
+        return False
+
+
+def send_photo(image: bytes | None, caption: str = "") -> bool:
+    """Push an image (Telegram only — SMS/email can't carry photos). Uses the
+    same wire throttle as text sends. Returns False (no-op) without an image or
+    a Telegram channel, so callers can fall back to a text alert."""
+    if not image:
+        return False
+    with _send_lock:
+        gap = time.monotonic() - _last_send[0]
+        if gap < _MIN_SEND_GAP:
+            time.sleep(_MIN_SEND_GAP - gap)
+        try:
+            return _send_telegram_photo(image, caption)
+        finally:
+            _last_send[0] = time.monotonic()
+
+
 def _send_twilio(body: str) -> bool:
     sid = get_key("TWILIO_ACCOUNT_SID")
     token = get_key("TWILIO_AUTH_TOKEN")

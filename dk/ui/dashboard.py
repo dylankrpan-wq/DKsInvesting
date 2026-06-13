@@ -2053,6 +2053,12 @@ with tab_crypto:
             st.caption(f"As of {_a.get('as_of_utc','')} UTC · grounded in live Blofin "
                        f"ticker / candles / funding. No order-book or OI data.")
 
+    # ---- Live chart for the pair above, with the setup drawn on it ----
+    if _pair.strip():
+        from dk.ui import perp_chart
+        st.markdown("##### 📈 Live chart — candles + your setup levels")
+        perp_chart.render(_pair, key="perp_main_chart")
+
     # ---- Scanner: leverage-in-my-favor setups across all perps ----
     st.markdown("##### 🎯 Scan all perps for setups")
     st.caption("Find perps with leverage in your favor — a tight stop relative to the target "
@@ -2067,6 +2073,41 @@ with tab_crypto:
             _rows = _ps.scan(side=_side)
         st.markdown(_ps.build_report(_rows))
         st.caption("Discovery, not instructions — honor each setup's invalidation.")
+    st.markdown("---")
+
+    # ---- Call-out scorecard: how every pushed setup actually did ----
+    st.markdown("##### 📋 Call-out scorecard — accuracy over time")
+    st.caption("Every pushed setup replayed against live candles: WIN (TP1 before stop), "
+               "LOSS (stop first), or still OPEN. Persisted, so the track record builds "
+               "over time — this is how we measure and improve the call-outs.")
+
+    @st.cache_data(ttl=300, show_spinner=False)
+    def _scorecard_data():
+        from dk.analysis import perp_scorecard as _scard
+        rows = _scard.build_ledger()
+        return rows, _scard.summary(rows)
+
+    if st.button("↻ Refresh scorecard", key="perp_scorecard_go"):
+        st.cache_data.clear()
+        st.rerun()
+    try:
+        from dk.analysis import perp_scorecard as _scard
+        with st.spinner("Replaying call-outs vs live candles…"):
+            _scrows, _stats = _scorecard_data()
+        if _scrows:
+            sc = st.columns(5)
+            sc[0].metric("Call-outs", _stats["total"])
+            sc[1].metric("W / L", f"{_stats['wins']} / {_stats['losses']}")
+            sc[2].metric("Open", _stats["open"])
+            sc[3].metric("Win rate",
+                         f"{_stats['win_rate_pct']}%" if _stats["win_rate_pct"] is not None else "—")
+            sc[4].metric("Expectancy",
+                         f"{_stats['expectancy_r']:+}R" if _stats["expectancy_r"] is not None else "—")
+            st.markdown(_scard.render_markdown(_scrows, _stats))
+        else:
+            st.info("No call-outs pushed yet — they'll appear here once the scanner fires.")
+    except Exception as e:
+        st.warning(f"Scorecard unavailable: {e}")
     st.markdown("---")
 
     st.subheader("🪙 Crypto — top 25 by market cap")

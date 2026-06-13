@@ -117,6 +117,17 @@ def _fmt_p(p):
     return _fmt(p)
 
 
+def _setup_msg(r: dict) -> str:
+    """One-line setup text — used both as the alert body and the chart caption."""
+    arrow = "🟢" if r["side"] == "long" else "🔴"
+    tw = " ⚡fund" if r.get("funding_tailwind") else ""
+    tps = r.get("tps") or []
+    tp_str = " / ".join(f"${_fmt_p(tp['level'])}" for tp in tps) or "—"
+    return (f"🎯 {arrow} {r['side'].upper()} {r['inst_id']} {r['rr1']}:1 "
+            f"(risk {r['risk_pct']}%) — entry ${_fmt_p(r['entry'])}, "
+            f"stop ${_fmt_p(r['stop'])}, TP1/2/3 {tp_str}{tw}")
+
+
 def scan_and_alert(push: bool = True) -> dict:
     """Scheduled entry: scan with a HIGH bar (only standout setups), emit a
     SETUP_SCAN alert per fresh one (per-symbol cooldown), then push the phone.
@@ -148,16 +159,9 @@ def scan_and_alert(push: bool = True) -> dict:
                 (r["inst_id"], f"-{cooldown_h} hours")).fetchone()
             if recent:
                 continue
-            arrow = "🟢" if r["side"] == "long" else "🔴"
-            tw = " ⚡fund" if r["funding_tailwind"] else ""
-            tps = r.get("tps") or []
-            tp_str = " / ".join(f"${_fmt_p(tp['level'])}" for tp in tps) or "—"
-            msg = (f"🎯 {arrow} {r['side'].upper()} {r['inst_id']} {r['rr1']}:1 "
-                   f"(risk {r['risk_pct']}%) — entry ${_fmt_p(r['entry'])}, "
-                   f"stop ${_fmt_p(r['stop'])}, TP1/2/3 {tp_str}{tw}")
             c.execute(
                 "INSERT INTO alerts (symbol, kind, message, payload) VALUES (?,?,?,?)",
-                (r["inst_id"], "SETUP_SCAN", msg, json.dumps(r)))
+                (r["inst_id"], "SETUP_SCAN", _setup_msg(r), json.dumps(r)))
             registered.append((c.lastrowid, r))
             new += 1
 
@@ -169,7 +173,25 @@ def scan_and_alert(push: bool = True) -> dict:
     except Exception as e:
         print(f"[setup_scan] tracker registration failed: {e}")
 
-    summary = {"scanned": True, "candidates": len(rows), "alerts": new}
+    # Chart-image push: render the annotated chart per fresh setup and send it as
+    # a Telegram photo (caption carries the levels). On success, mark the alert
+    # sms_sent=1 so the text digest below doesn't also send it. If image export
+    # is unavailable (no kaleido/Chrome), the setup falls through to the text digest.
+    charts_pushed = 0
+    if push and registered and cfg.get("push_charts", True):
+        try:
+            from dk.charts import perp_fig
+            for aid, r in registered:
+                png = perp_fig.chart_png(r["inst_id"], overlay=r["side"].capitalize())
+                if png and sms.send_photo(png, _setup_msg(r)):
+                    with store.conn() as c:
+                        c.execute("UPDATE alerts SET sms_sent=1 WHERE id=?", (aid,))
+                    charts_pushed += 1
+        except Exception as e:
+            print(f"[setup_scan] chart push failed: {e}")
+
+    summary = {"scanned": True, "candidates": len(rows), "alerts": new,
+               "charts_pushed": charts_pushed}
     if push and new:
         try:
             summary["push"] = sms.push_digest()

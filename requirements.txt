@@ -6,6 +6,7 @@ python-dotenv>=1.0
 pyyaml>=6.0
 streamlit>=1.39
 plotly>=5.24
+kaleido>=0.2    # static PNG export for Telegram perp charts (1.x drives headless Chrome)
 apscheduler>=3.10
 vadersentiment>=3.3.2
 tradingview-ta>=3.3.0

@@ -41,6 +41,16 @@ def _hourly_job():
         print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] perp recap -> {rc}")
     except Exception as e:
         print(f"  !! perp recap failed: {e}")
+    try:
+        # Refresh the persistent call-out track record (freezes resolved outcomes).
+        from dk.analysis import perp_scorecard
+        rows = perp_scorecard.build_ledger()
+        s = perp_scorecard.summary(rows)
+        print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] perp scorecard -> "
+              f"{s['total']} call-outs, {s['wins']}W/{s['losses']}L/{s['open']}open, "
+              f"win {s['win_rate_pct']}% exp {s['expectancy_r']}R")
+    except Exception as e:
+        print(f"  !! perp scorecard failed: {e}")
 
 
 def _crypto_spike_job():
