@@ -15,3 +15,6 @@ data/
 *.swp
 uv.lock
 .claude/
+
+# Generated pair-screen reports
+pair_trade_analysis_*.md
