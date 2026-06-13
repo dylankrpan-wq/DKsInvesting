@@ -110,6 +110,18 @@ crypto_spike:
   cooldown_minutes: 30       # don't re-alert the same pair within this
   direction: both            # up | down | both (pumps and dumps)
 
+# 🎯 Scheduled perp setup scan — hourly, ranks all Blofin perps for "leverage in
+# my favor" setups (tight stop vs target) and texts the top 1-2 standouts. Higher
+# quality bar than the manual dashboard scan. Requires the scheduler running.
+setup_scan:
+  enabled: true
+  cron_minute: 30            # runs at HH:30, offset from the hourly pulse at HH:00
+  top_n: 2                   # most to push per run
+  min_rr: 4.0                # only push setups with R:R >= this (manual scan uses 2.5)
+  max_risk_pct: 3.0          # ...and stop within this % of entry (tight = leverage-friendly)
+  cooldown_hours: 6          # don't re-push the same pair within this window
+  side: both                 # both | long | short
+
 # 📊 Hourly pulse — a consolidated activity summary texted at the top of each
 # hour, 24/7, but ONLY when the prior hour had notable activity (conviction
 # setups, movers, breaking news, crypto moves, rank changes). Quiet hours stay
@@ -143,6 +155,7 @@ sms:
     - CONVICTION_LONG
     - CONVICTION_SHORT
     - CRYPTO_SPIKE
+    - SETUP_SCAN
     - HIGH_IMPACT_NEWS
     - NEWS_VELOCITY
     - PERSON_ACTIVITY

@@ -72,6 +72,7 @@ Each component is clipped to [-1, +1], then weighted, then magnitude × 100 = fi
 | **MACRO_NEAR** | High-importance macro event (FOMC, CPI, NFP) within 3 days |
 | **CRYPTO_MOVE** | Crypto 24h change ≥ 5% |
 | **CRYPTO_SPIKE** | A Blofin perp moves ≥ threshold in a short window (e.g. +6%/3min) — fast pump/dump, sub-minute scan |
+| **SETUP_SCAN** | Scheduled perp scanner found a high-R:R, tight-stop setup (leverage in your favor) and pushed it |
 | **CONVICTION_LONG / SHORT** | Multiple bullish/bearish signals converging on one name (radar convergence) |
 | **RANK_JUMP** | Ticker climbs ≥3 ranks AND current score ≥35 |
 | **SCORE_SURGE** | Opportunity score gains ≥10 points between snapshots |

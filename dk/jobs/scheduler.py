@@ -48,6 +48,24 @@ def _crypto_spike_job():
         print(f"  !! crypto spike failed: {e}")
 
 
+def _setup_scan_job():
+    """Hourly perp setup scan; pushes the top high-R:R setups to the phone."""
+    try:
+        from dk.analysis import perp_scanner
+        res = perp_scanner.scan_and_alert()
+        print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] setup scan -> {res}")
+    except Exception as e:
+        print(f"  !! setup scan failed: {e}")
+
+
+def _setup_scan_minute() -> int:
+    try:
+        from dk.analysis import perp_scanner
+        return perp_scanner.cron_minute()
+    except Exception:
+        return 30
+
+
 def _spike_interval() -> int:
     try:
         from dk.jobs import crypto_spike
@@ -84,10 +102,15 @@ def start_background_scheduler(run_now: bool = True):
     spike_s = _spike_interval()
     sched.add_job(_crypto_spike_job, IntervalTrigger(seconds=spike_s),
                   id="crypto_spike", max_instances=1, coalesce=True)
+    # Hourly perp setup scan -> phone (offset from the pulse).
+    sched.add_job(_setup_scan_job, CronTrigger(minute=_setup_scan_minute()),
+                  id="setup_scan", max_instances=1, coalesce=True,
+                  misfire_grace_time=300)
     sched.start()
     _BG_SCHED = sched
     print(f"[scheduler] in-process scheduler started "
-          f"({POLL_MINUTES} min poll + hourly pulse + {spike_s}s crypto spike)")
+          f"({POLL_MINUTES} min poll + hourly pulse + {spike_s}s crypto spike "
+          f"+ hourly setup scan)")
     return sched
 
 
@@ -131,9 +154,11 @@ def main():
     spike_s = _spike_interval()
     sched.add_job(_crypto_spike_job, IntervalTrigger(seconds=spike_s),
                   id="crypto_spike", max_instances=1, coalesce=True)
+    sched.add_job(_setup_scan_job, CronTrigger(minute=_setup_scan_minute()),
+                  id="setup_scan", max_instances=1, coalesce=True, misfire_grace_time=300)
     sched.start()
     print(f"DK scheduler running every {POLL_MINUTES} min + hourly pulse "
-          f"+ {spike_s}s crypto spike. Ctrl+C to stop.")
+          f"+ {spike_s}s crypto spike + hourly setup scan. Ctrl+C to stop.")
 
     stop = False
     def handle(sig, frame):

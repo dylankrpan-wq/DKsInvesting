@@ -15,9 +15,19 @@ and invalidation so it's a setup to investigate, not an instruction. On-demand
 only (dashboard button / CLI) — not on the fast timer.
 """
 from __future__ import annotations
+import json
 import time
+from dk.config import load_watchlist
 from dk.sources import crypto_deriv
 from dk.analysis import perp
+
+
+def _cfg() -> dict:
+    return (load_watchlist().get("setup_scan") or {})
+
+
+def cron_minute() -> int:
+    return int(_cfg().get("cron_minute", 30))
 
 
 def scan(top_n: int = 10, max_deep: int = 25, min_vol_usd: float = 300_000,
@@ -93,6 +103,61 @@ def build_report(rows: list[dict]) -> str:
           "risk on leverage; no order-book/OI/IV in this data. Invalidation is per-setup: "
           "close/hold past the stop level._"]
     return "\n".join(L)
+
+
+def _fmt_p(p):
+    from dk.analysis.perp import _fmt
+    return _fmt(p)
+
+
+def scan_and_alert(push: bool = True) -> dict:
+    """Scheduled entry: scan with a HIGH bar (only standout setups), emit a
+    SETUP_SCAN alert per fresh one (per-symbol cooldown), then push the phone.
+    No-op when disabled or no phone channel."""
+    from dk.store import db as store
+    cfg = _cfg()
+    if not cfg.get("enabled", True):
+        return {"skipped": "disabled"}
+    from dk.notify import sms
+    if not sms.is_configured():
+        return {"skipped": "no phone channel"}
+
+    rows = scan(top_n=int(cfg.get("top_n", 2)),
+                min_rr=float(cfg.get("min_rr", 4.0)),
+                max_risk_pct=float(cfg.get("max_risk_pct", 3.0)),
+                side=cfg.get("side", "both"))
+    if not rows:
+        return {"scanned": True, "alerts": 0, "note": "no standout setups"}
+
+    cooldown_h = int(cfg.get("cooldown_hours", 6))
+    new = 0
+    store.init_db()
+    with store.conn() as c:
+        for r in rows:
+            recent = c.execute(
+                """SELECT 1 FROM alerts WHERE symbol=? AND kind='SETUP_SCAN'
+                   AND created_at >= datetime('now', ?) LIMIT 1""",
+                (r["inst_id"], f"-{cooldown_h} hours")).fetchone()
+            if recent:
+                continue
+            arrow = "🟢" if r["side"] == "long" else "🔴"
+            tw = " ⚡fund" if r["funding_tailwind"] else ""
+            msg = (f"🎯 {arrow} {r['side'].upper()} {r['inst_id']} {r['rr1']}:1 "
+                   f"(risk {r['risk_pct']}%) — entry ${_fmt_p(r['entry'])}, "
+                   f"stop ${_fmt_p(r['stop'])}, tgt ${_fmt_p(r['target1'])}{tw}")
+            c.execute(
+                "INSERT INTO alerts (symbol, kind, message, payload) VALUES (?,?,?,?)",
+                (r["inst_id"], "SETUP_SCAN", msg, json.dumps(r)))
+            new += 1
+
+    summary = {"scanned": True, "candidates": len(rows), "alerts": new}
+    if push and new:
+        try:
+            summary["push"] = sms.push_digest()
+        except Exception as e:
+            print(f"[setup_scan] push failed: {e}")
+            summary["push"] = {"error": str(e)}
+    return summary
 
 
 if __name__ == "__main__":

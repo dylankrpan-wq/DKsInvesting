@@ -13,6 +13,7 @@ KIND_EMOJI = {
     "CRYPTO_SPIKE": ":rotating_light:",
     "CONVICTION_LONG": ":dart:",
     "CONVICTION_SHORT": ":dart:",
+    "SETUP_SCAN": ":dart:",
 }
 
 
