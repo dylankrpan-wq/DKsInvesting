@@ -2032,6 +2032,11 @@ with tab_calendar:
         st.dataframe(ipos, use_container_width=True, hide_index=True)
 
 with tab_crypto:
+    # ---- Read-only live Blofin account (equity + open positions) ----
+    from dk.ui import perp_account
+    perp_account.render()
+    st.markdown("---")
+
     # ---- On-demand perp structure analysis (any Blofin pair) ----
     st.subheader("🔍 Perp analysis — any Blofin pair")
     st.caption("Type a perpetual (e.g. BEAT-USDT, TRUMP-USDT, or just BTC) for a live "
