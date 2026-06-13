@@ -190,6 +190,12 @@ def send_brief(text: str) -> int:
     return sent
 
 
+def send_summary(text: str) -> int:
+    """Send an ad-hoc summary (e.g. the hourly pulse) using the same
+    channel-aware chunking as the desk brief. Returns chunks sent."""
+    return send_brief(text)
+
+
 def push_digest() -> dict:
     """Compose + send ONE digest SMS of unsent live-event alerts. Marks them sms_sent=1."""
     if not is_configured():

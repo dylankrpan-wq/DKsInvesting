@@ -94,6 +94,22 @@ notifications:
 branding:
   signature: "DK Investing™"
 
+# 📊 Hourly pulse — a consolidated activity summary texted at the top of each
+# hour, 24/7, but ONLY when the prior hour had notable activity (conviction
+# setups, movers, breaking news, crypto moves, rank changes). Quiet hours stay
+# silent. Requires the scheduler to be running (start_scheduler.bat or the
+# dashboard's in-process scheduler). Separate from instant alerts and the
+# daily brief.
+hourly:
+  enabled: true
+  window_minutes: 60         # how far back each pulse looks
+  max_per_kind: 5            # cap items shown per category in the text
+  min_notable: 3             # an hour with only low-signal tech alerts needs >= this many to send
+  # The pulse skips alerts already texted instantly by the per-cycle digest
+  # (the sms.live_kinds below), so you're never notified twice for one event —
+  # it's a complementary roundup of everything else that moved (price/volume/
+  # crypto moves, score shifts, tech signals).
+
 # Daily desk brief — Claude-written end-of-day synthesis shown in the 📡 Now tab.
 # Requires ANTHROPIC_API_KEY in config/secrets.env (https://platform.claude.com).
 # Grounded in local DB data only; costs roughly $0.10-0.20 per market day on Opus.

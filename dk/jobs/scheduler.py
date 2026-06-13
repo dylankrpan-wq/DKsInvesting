@@ -12,6 +12,7 @@ import time
 from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 from dk.jobs import poller
 
 POLL_MINUTES = int(os.getenv("POLL_MINUTES", "15"))
@@ -24,6 +25,16 @@ def _job():
         print(f"  -> {summary}")
     except Exception as e:
         print(f"  !! poll failed: {e}")
+
+
+def _hourly_job():
+    """Top-of-hour consolidated pulse to the phone (only when notable)."""
+    try:
+        from dk.briefing import hourly
+        res = hourly.maybe_send()
+        print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] hourly pulse -> {res}")
+    except Exception as e:
+        print(f"  !! hourly pulse failed: {e}")
 
 
 _BG_SCHED = None
@@ -44,9 +55,16 @@ def start_background_scheduler(run_now: bool = True):
     sched.add_job(_job, IntervalTrigger(minutes=POLL_MINUTES),
                   id="poll", next_run_time=first_run,
                   max_instances=1, coalesce=True)
+    # Hourly pulse: top of every hour, 24/7 (sends only when notable).
+    # misfire_grace_time=300 so a brief stall at :00 still delivers (the default
+    # 1s would silently skip the whole hour since it only fires once).
+    sched.add_job(_hourly_job, CronTrigger(minute=0),
+                  id="hourly_pulse", max_instances=1, coalesce=True,
+                  misfire_grace_time=300)
     sched.start()
     _BG_SCHED = sched
-    print(f"[scheduler] in-process scheduler started ({POLL_MINUTES} min interval)")
+    print(f"[scheduler] in-process scheduler started "
+          f"({POLL_MINUTES} min poll + hourly pulse)")
     return sched
 
 
@@ -85,8 +103,10 @@ def last_poll_info() -> dict:
 def main():
     sched = BackgroundScheduler(timezone="UTC")
     sched.add_job(_job, IntervalTrigger(minutes=POLL_MINUTES), id="poll", next_run_time=datetime.now())
+    sched.add_job(_hourly_job, CronTrigger(minute=0), id="hourly_pulse",
+                  max_instances=1, coalesce=True, misfire_grace_time=300)
     sched.start()
-    print(f"DK scheduler running every {POLL_MINUTES} min. Ctrl+C to stop.")
+    print(f"DK scheduler running every {POLL_MINUTES} min + hourly pulse. Ctrl+C to stop.")
 
     stop = False
     def handle(sig, frame):
