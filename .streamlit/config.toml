@@ -9,6 +9,9 @@ font = "sans serif"
 [browser]
 gatherUsageStats = false
 
+# headless=false so LOCAL `streamlit run` auto-opens your browser. The hosted
+# Railway deploy sets `--server.headless true` on its start command (railway.json),
+# which overrides this — so production stays headless regardless.
 [server]
-headless = true
+headless = false
 runOnSave = true
