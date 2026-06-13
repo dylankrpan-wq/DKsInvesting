@@ -62,118 +62,147 @@ def _open_signals(c) -> list[sqlite3.Row]:
     return c.execute("SELECT * FROM perp_signals WHERE status='open'").fetchall()
 
 
+def _prices(price_map: dict | None) -> dict | None:
+    if price_map is not None:
+        return price_map
+    from dk.sources import crypto_deriv
+    return {t["inst_id"]: t["last"] for t in crypto_deriv.fetch_tickers("SWAP")}
+
+
 def check(price_map: dict | None = None, push: bool = True) -> dict:
-    """Detect TP/stop touches on open signals; ping on each event. price_map:
-    {inst_id: last}. Fetches all perp tickers if not supplied."""
-    if not _cfg().get("enabled", True):
+    """Detect TP/stop touches on open signals and ping on each event. Prices are
+    fetched OUTSIDE any DB transaction; events are SENT before the hit/status
+    change is persisted, so a failed send isn't silently lost (it retries next
+    tick). price_map {inst_id: last} is reused from the spike loop when passed."""
+    cfg = _cfg()
+    if not cfg.get("enabled", True):
         return {"skipped": "disabled"}
     store.init_db()
+    max_age_h = int(cfg.get("max_age_hours", 48))
+
+    # 1) Expire stale open signals, then read the open set (short write conn)
     with store.conn() as c:
+        c.execute("""UPDATE perp_signals SET status='expired', resolved_at=datetime('now')
+                     WHERE status='open' AND opened_at < datetime('now', ?)""",
+                  (f"-{max_age_h} hours",))
         signals = _open_signals(c)
-        if not signals:
-            return {"open": 0, "events": 0}
+    if not signals:
+        return {"open": 0, "events": 0}
 
-        if price_map is None:
-            from dk.sources import crypto_deriv
-            price_map = {t["inst_id"]: t["last"] for t in crypto_deriv.fetch_tickers("SWAP")}
-        if not price_map:
-            return {"open": len(signals), "events": 0, "note": "no price data"}
+    # 2) Prices outside any connection — never hold the writer across the network
+    price_map = _prices(price_map)
+    if not price_map:
+        return {"open": len(signals), "events": 0, "note": "no price data"}
 
-        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        msgs: list[str] = []
-        events = 0
-        for s in signals:
-            last = price_map.get(s["inst_id"])
-            if not last:
-                continue
-            side, entry = s["side"], s["entry"]
-            gain = _gain_pct(side, entry, last)
-            mfe = max(s["mfe_pct"] or 0, gain)
-            mae = min(s["mae_pct"] or 0, gain)
-            hit = set(filter(None, (s["tp_hits"] or "").split(",")))
-            new_hits = []
-            for col in _TP_COLS:
-                lvl = s[col]
-                if lvl and col not in hit:
-                    reached = last >= lvl if side == "long" else last <= lvl
-                    if reached:
-                        hit.add(col); new_hits.append((col, lvl))
-            stopped = (last <= s["stop"]) if side == "long" else (last >= s["stop"])
+    # 3) Detect in memory; each signal carries its OWN message list
+    updates = []
+    all_msgs: list[str] = []
+    for s in signals:
+        last = price_map.get(s["inst_id"])
+        if not last:
+            continue
+        side, entry = s["side"], s["entry"]
+        gain = _gain_pct(side, entry, last)
+        mfe = round(max(s["mfe_pct"] or 0, gain), 2)
+        mae = round(min(s["mae_pct"] or 0, gain), 2)
+        hit = set(filter(None, (s["tp_hits"] or "").split(",")))
+        new_hits = []
+        for col in _TP_COLS:
+            lvl = s[col]
+            if lvl and col not in hit:
+                if (last >= lvl) if side == "long" else (last <= lvl):
+                    hit.add(col); new_hits.append((col, lvl))
+        stopped = (last <= s["stop"]) if side == "long" else (last >= s["stop"])
+        arrow = "🟢" if side == "long" else "🔴"
+        tag = f"{arrow} {s['inst_id']} {side}"
+        status, resolved, smsgs = "open", False, []
+        if stopped:
+            prior = (" after " + "/".join(sorted(hit)).upper()) if hit else ""
+            smsgs.append(f"🛑 {tag} STOPPED at ${_fmt(last)} ({gain:+.1f}%{prior}). "
+                         f"Closed. (MFE {mfe:+.1f}%)")
+            status, resolved = "stopped", True
+        else:
+            for col, lvl in new_hits:
+                if col == "tp3":
+                    smsgs.append(f"✅ {tag} hit TP3 ${_fmt(lvl)} ({gain:+.1f}%) — "
+                                 f"full target. Closed.")
+                    status, resolved = "tp3", True
+                else:
+                    nxt = "tp2" if col == "tp1" else "tp3"
+                    smsgs.append(f"🎯 {tag} hit {col.upper()} ${_fmt(lvl)} ({gain:+.1f}%). "
+                                 f"Next {nxt.upper()} ${_fmt(s[nxt])}, stop ${_fmt(s['stop'])}. (open)")
+        updates.append({"id": s["id"], "inst": s["inst_id"], "hits": ",".join(sorted(hit)),
+                        "status": status, "resolved": resolved, "mfe": mfe, "mae": mae,
+                        "last": last, "msgs": smsgs})
+        all_msgs.extend(smsgs)
 
-            arrow = "🟢" if side == "long" else "🔴"
-            tag = f"{arrow} {s['inst_id']} {side}"
-            status = "open"
-            resolved = None
-            if stopped:
-                status = "stopped"; resolved = now
-                prior = (" after " + "/".join(sorted(hit)).upper()) if hit else ""
-                msgs.append(f"🛑 {tag} STOPPED at ${_fmt(last)} ({gain:+.1f}%{prior}). "
-                            f"Closed. (MFE {mfe:+.1f}%)")
-                events += 1
-            else:
-                for col, lvl in new_hits:
-                    events += 1
-                    if col == "tp3":
-                        status = "tp3"; resolved = now
-                        msgs.append(f"✅ {tag} hit TP3 ${_fmt(lvl)} ({gain:+.1f}%) — "
-                                    f"full target. Closed.")
-                    else:
-                        nxt = "tp2" if col == "tp1" else "tp3"
-                        nxt_lvl = s[nxt]
-                        msgs.append(f"🎯 {tag} hit {col.upper()} ${_fmt(lvl)} ({gain:+.1f}%). "
-                                    f"Next {nxt.upper()} ${_fmt(nxt_lvl)}, stop ${_fmt(s['stop'])}. "
-                                    f"(open)")
-
-            c.execute(
-                """UPDATE perp_signals SET tp_hits=?, status=?, mfe_pct=?, mae_pct=?,
-                   last_price=?, resolved_at=COALESCE(?, resolved_at) WHERE id=?""",
-                (",".join(sorted(hit)), status, round(mfe, 2), round(mae, 2),
-                 last, resolved, s["id"]))
-            # Record events in the alerts table for dashboard/history
-            for m in (msgs[-len(new_hits) - (1 if stopped else 0):] if (new_hits or stopped) else []):
-                c.execute("INSERT INTO alerts (symbol, kind, message) VALUES (?,?,?)",
-                          (s["inst_id"], "PERP_TRACK", m))
-
-    summary = {"open": len(signals), "events": events}
-    if push and msgs:
+    # 4) Send FIRST — a failed send must not mark the events as seen
+    sent_ok = True
+    if push and all_msgs:
         from dk.notify import sms
-        body = "📊 Perp setup update:\n\n" + "\n".join(msgs)
+        body = "📊 Perp setup update:\n\n" + "\n".join(all_msgs)
         try:
-            summary["chunks"] = sms.send_summary(body)
+            sent_ok = sms.send_summary(body) > 0
         except Exception as e:
             print(f"[perp_tracker] send failed: {e}")
-            summary["error"] = str(e)
-    return summary
+            sent_ok = False
+
+    # 5) Persist: always price/MFE/MAE; commit hit/status only if the ping went out
+    events = 0
+    with store.conn() as c:
+        for u in updates:
+            if u["msgs"] and not sent_ok:
+                c.execute("UPDATE perp_signals SET mfe_pct=?, mae_pct=?, last_price=? WHERE id=?",
+                          (u["mfe"], u["mae"], u["last"], u["id"]))
+                continue
+            if u["resolved"]:
+                c.execute("""UPDATE perp_signals SET tp_hits=?, status=?, mfe_pct=?, mae_pct=?,
+                             last_price=?, resolved_at=datetime('now') WHERE id=?""",
+                          (u["hits"], u["status"], u["mfe"], u["mae"], u["last"], u["id"]))
+            else:
+                c.execute("""UPDATE perp_signals SET tp_hits=?, status=?, mfe_pct=?, mae_pct=?,
+                             last_price=? WHERE id=?""",
+                          (u["hits"], u["status"], u["mfe"], u["mae"], u["last"], u["id"]))
+            for m in u["msgs"]:
+                events += 1
+                c.execute("INSERT INTO alerts (symbol, kind, message) VALUES (?,?,?)",
+                          (u["inst"], "PERP_TRACK", m))
+    return {"open": len(signals), "events": events,
+            "sent": (sent_ok if all_msgs else None)}
 
 
 def hourly_recap(push: bool = True) -> dict:
     """Consolidated 'how the open setups are doing' summary; no-op if none open."""
-    if not _cfg().get("enabled", True) or not _cfg().get("hourly_recap", True):
+    cfg = _cfg()
+    if not cfg.get("enabled", True) or not cfg.get("hourly_recap", True):
         return {"skipped": "disabled"}
     store.init_db()
     with store.conn() as c:
-        signals = _open_signals(c)
-        if not signals:
-            return {"open": 0}
-        from dk.sources import crypto_deriv
-        price_map = {t["inst_id"]: t["last"] for t in crypto_deriv.fetch_tickers("SWAP")}
-        lines = []
-        for s in signals:
-            last = price_map.get(s["inst_id"])
-            if not last:
-                continue
-            gain = _gain_pct(s["side"], s["entry"], last)
-            hit = set(filter(None, (s["tp_hits"] or "").split(",")))
-            rungs = " ".join((col.upper() + ("✓" if col in hit else "·")) for col in _TP_COLS)
-            arrow = "🟢" if s["side"] == "long" else "🔴"
-            lines.append(f"{arrow} {s['inst_id']} {s['side']}: {gain:+.1f}% "
-                         f"[{rungs}] MFE {s['mfe_pct']:+.1f}% · stop ${_fmt(s['stop'])}")
+        signals = c.execute(
+            "SELECT * FROM perp_signals WHERE status='open' ORDER BY opened_at DESC").fetchall()
+    if not signals:
+        return {"open": 0}
+    price_map = _prices(None)  # fetched outside the conn
+    cap = int(cfg.get("recap_max", 12))
+    lines = []
+    for s in signals[:cap]:
+        last = price_map.get(s["inst_id"])
+        if not last:
+            continue
+        gain = _gain_pct(s["side"], s["entry"], last)
+        hit = set(filter(None, (s["tp_hits"] or "").split(",")))
+        rungs = " ".join((col.upper() + ("✓" if col in hit else "·")) for col in _TP_COLS)
+        arrow = "🟢" if s["side"] == "long" else "🔴"
+        lines.append(f"{arrow} {s['inst_id']} {s['side']}: {gain:+.1f}% "
+                     f"[{rungs}] MFE {s['mfe_pct']:+.1f}% · stop ${_fmt(s['stop'])}")
     if not lines:
         return {"open": len(signals), "note": "no prices"}
-    summary = {"open": len(lines)}
+    extra = len(signals) - len(lines)
+    summary = {"open": len(signals)}
     if push:
         from dk.notify import sms
-        body = f"📈 Open perp setups — how they're doing ({len(lines)}):\n\n" + "\n".join(lines)
+        body = (f"📈 Open perp setups — how they're doing ({len(signals)}):\n\n"
+                + "\n".join(lines) + (f"\n…+{extra} more" if extra > 0 else ""))
         try:
             summary["chunks"] = sms.send_summary(body)
         except Exception as e:

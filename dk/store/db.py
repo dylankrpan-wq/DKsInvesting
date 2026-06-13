@@ -267,6 +267,11 @@ CREATE TABLE IF NOT EXISTS perp_signals (
     resolved_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_perp_signals_status ON perp_signals(status);
+-- At most one OPEN signal per (inst_id, side): a partial unique index makes the
+-- dup guard atomic (absorbs a register race between the scheduled scan and the
+-- dashboard button); resolved/expired rows don't conflict.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_perp_open ON perp_signals(inst_id, side)
+    WHERE status='open';
 
 CREATE TABLE IF NOT EXISTS daily_briefs (
     brief_date TEXT PRIMARY KEY,         -- one row per market day (idempotent)

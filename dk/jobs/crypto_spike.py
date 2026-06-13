@@ -139,7 +139,8 @@ def run_once(push: bool = True) -> dict:
         prune_cutoff = (now - timedelta(minutes=retention)).isoformat(timespec="seconds")
         c.execute("DELETE FROM crypto_deriv_ticks WHERE ts < ?", (prune_cutoff,))
 
-    summary = {"fetched": len(price_now), "alerts": new_alerts, "fired": fired}
+    summary = {"fetched": len(price_now), "alerts": new_alerts, "fired": fired,
+               "_prices": {iid: t["last"] for iid, t in price_now.items()}}
 
     if push and new_alerts:
         try:

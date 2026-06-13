@@ -46,16 +46,19 @@ def _hourly_job():
 def _crypto_spike_job():
     """Fast crypto-derivatives spike check (sub-minute); alerts on short pumps.
     Also runs the perp-setup tracker so TP/stop touches ping promptly."""
+    prices = None
     try:
         from dk.jobs import crypto_spike
         res = crypto_spike.run_once()
-        if res.get("alerts"):
-            print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] crypto spike -> {res}")
+        if isinstance(res, dict):
+            prices = res.pop("_prices", None)  # reuse the snapshot for the tracker
+            if res.get("alerts"):
+                print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] crypto spike -> {res}")
     except Exception as e:
         print(f"  !! crypto spike failed: {e}")
     try:
         from dk.analysis import perp_tracker
-        tr = perp_tracker.check()
+        tr = perp_tracker.check(price_map=prices)
         if tr.get("events"):
             print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] perp tracker -> {tr}")
     except Exception as e:

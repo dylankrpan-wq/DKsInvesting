@@ -13,10 +13,10 @@ as an idea to investigate with an invalidation level — never a buy/sell call.
 """
 from __future__ import annotations
 import json
-import sqlite3
-from dk.config import DB_PATH, load_watchlist, equity_symbols
+from dk.config import load_watchlist
 from dk import llm
 from dk.briefing import radar
+from dk.store import db as store
 
 
 def _cfg() -> dict:
@@ -45,9 +45,7 @@ def _candidates() -> list[dict]:
     fresh_h = int(cfg.get("fresh_trigger_hours", 8))
     seen: dict[str, dict] = {}
 
-    with sqlite3.connect(DB_PATH) as c:
-        c.row_factory = sqlite3.Row
-
+    with store.conn() as c:  # store.conn sets busy_timeout so reads wait, not error
         for s in radar.opportunity_spotlight(limit=8):
             sym = s["symbol"].upper()
             if sym not in seen and _has_fresh_trigger(c, sym, fresh_h):

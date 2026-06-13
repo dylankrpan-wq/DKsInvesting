@@ -15,12 +15,21 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
+import time
 from dk.config import DB_PATH, get_key, load_watchlist
 
 # Serializes push_digest across the in-process scheduler threads (the 15-min
 # poll job and the sub-minute crypto-spike job both call it), so they can't both
 # SELECT the same unsent rows and double-send before either marks them.
 _digest_lock = threading.Lock()
+
+# Serializes ALL phone sends and spaces them ~1.1s apart. Many jobs now push
+# (digest, spike, setup-scan, thesis, pulse, perp-tracker recap/events) and can
+# fire near the same instant (e.g. top of the hour) — Telegram rate-limits a
+# chat to ~1 msg/sec and silently drops bursts, so throttle at the wire.
+_send_lock = threading.Lock()
+_last_send = [0.0]
+_MIN_SEND_GAP = 1.1
 
 # Alert kinds that count as "live events" worth a text. Tunable in watchlist.yaml.
 DEFAULT_LIVE_KINDS = [
@@ -143,12 +152,17 @@ def _send_email_gateway(body: str) -> bool:
 
 
 def _send(body: str) -> bool:
-    # Telegram first — free, instant, no carrier approval needed.
-    if _send_telegram(body):
-        return True
-    if _send_twilio(body):
-        return True
-    return _send_email_gateway(body)
+    # Serialize + throttle so concurrent jobs don't burst the chat past Telegram's
+    # ~1 msg/sec limit (which silently drops messages).
+    with _send_lock:
+        gap = time.monotonic() - _last_send[0]
+        if gap < _MIN_SEND_GAP:
+            time.sleep(_MIN_SEND_GAP - gap)
+        try:
+            # Telegram first — free, instant, no carrier approval needed.
+            return _send_telegram(body) or _send_twilio(body) or _send_email_gateway(body)
+        finally:
+            _last_send[0] = time.monotonic()
 
 
 def send_test() -> bool:
@@ -240,12 +254,12 @@ def push_digest() -> dict:
             if len(picked) >= max_items:
                 break
 
-        # Compose concise digest
+        # Compose digest. 300-char cap (not 90) so a SETUP_SCAN setup keeps its
+        # full TP1/2/3 ladder and a spike keeps its structure read — the real
+        # channel limit is handled by _send/_CHANNEL_CAPS.
         lines = ["📈 DK live alerts:"]
         for r in picked:
-            msg = r["message"]
-            # strip leading emoji/icons for brevity
-            lines.append(f"• {msg[:90]}")
+            lines.append(f"• {r['message'][:300]}")
         body = "\n".join(lines)
 
         ok = _send(body)

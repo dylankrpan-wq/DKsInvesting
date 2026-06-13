@@ -117,6 +117,8 @@ crypto_spike:
 perp_tracker:
   enabled: true
   hourly_recap: true         # consolidated open-setups recap each hour
+  max_age_hours: 48          # auto-expire a setup that never hits a TP or its stop
+  recap_max: 12              # cap the hourly recap to this many open setups
 
 # 📋 Stock thesis pushes — event-triggered. When a watchlist or discovered name
 # forms a setup (bullish/bearish convergence, or a high-heat market-scan mover),

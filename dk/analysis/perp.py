@@ -110,7 +110,8 @@ def analyze(inst_id: str, ticker: dict | None = None) -> dict | None:
         vols = [c["vol"] for c in m15]
         avgv = sum(vols) / len(vols) if vols else 0
         a["last_vol_x"] = round(vols[-1] / avgv, 1) if avgv else None
-        a["micro_net_pct"] = round(_pct(m15[-1]["close"], m15[0]["open"]), 1)
+        _mnp = _pct(m15[-1]["close"], m15[0]["open"])
+        a["micro_net_pct"] = round(_mnp, 1) if _mnp is not None else None
         a["rejections"] = sum(1 for c in recent if c["close"] < c["open"])
 
     # Position classification
@@ -142,7 +143,10 @@ def analyze(inst_id: str, ticker: dict | None = None) -> dict | None:
         a["short"] = _setup(last, short_stop,
                             [a.get("range_lo"), ll, ma, low24], "short")
         a["invalidation_short"] = f"close/hold above ${_fmt(res)}"
-    if sup and res:
+    # `sup < last` guard: without it, when sup (local/24h low) sits at/above the
+    # live price on a fresh breakdown, the long stop lands ABOVE entry — an
+    # inverted, nonsensical risk that also breaks the tracker's TP/stop logic.
+    if sup and res and sup < last:
         long_stop = sup * 0.995
         a["long"] = _setup(last, long_stop,
                            [a.get("range_hi"), lh, ma, a.get("peak_1h"), t["high24h"]],
@@ -168,7 +172,9 @@ def _setup(entry: float, stop: float, levels: list, side: str) -> dict:
     risk = abs(stop - entry)
     risk_pct = round(risk / entry * 100, 1) if entry else None
     out = {"entry": round(entry, 6), "stop": round(stop, 6), "risk_pct": risk_pct}
-    if not entry or risk <= 0:
+    # Stop must be on the correct side of entry, else the setup is invalid.
+    bad_stop = (side == "short" and stop <= entry) or (side == "long" and stop >= entry)
+    if not entry or risk <= 0 or bad_stop:
         out["tps"] = []
         return out
 
