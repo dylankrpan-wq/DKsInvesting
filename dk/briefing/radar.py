@@ -16,6 +16,7 @@ from dk.config import DB_PATH, equity_symbols
 KIND_META = {
     "SETUP_SCAN":       ("Setup Scan", "🎯", "A high-R:R defined-risk perp setup the scanner surfaced — tight stop vs target."),
     "THESIS":           ("Stock Thesis", "📋", "A forward-looking thesis on a stock with a setup forming — chart + momentum + catalyst."),
+    "PERP_TRACK":       ("Setup Update", "📊", "A tracked perp setup touched a take-profit rung or its stop — progress until it resolves."),
     "CONVICTION_LONG":  ("Conviction", "🎯", "Multiple bullish signals converging hard — the strongest long-side setup the system sees."),
     "CONVICTION_SHORT": ("Conviction", "🎯", "Multiple bearish signals converging hard — the strongest short-side setup the system sees."),
     "HIGH_IMPACT_NEWS": ("Breaking", "⚡", "High-impact headline just dropped — these move stocks fast."),
@@ -42,6 +43,7 @@ KIND_PRIORITY = {
     "CONVICTION_SHORT": 90,
     "CRYPTO_SPIKE": 89,
     "SETUP_SCAN": 83,
+    "PERP_TRACK": 80,
     "THESIS": 76,
     "HIGH_IMPACT_NEWS": 88,
     "PERSON_ACTIVITY": 86,

@@ -28,17 +28,24 @@ def _job():
 
 
 def _hourly_job():
-    """Top-of-hour consolidated pulse to the phone (only when notable)."""
+    """Top-of-hour consolidated pulse + open perp-setup recap to the phone."""
     try:
         from dk.briefing import hourly
         res = hourly.maybe_send()
         print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] hourly pulse -> {res}")
     except Exception as e:
         print(f"  !! hourly pulse failed: {e}")
+    try:
+        from dk.analysis import perp_tracker
+        rc = perp_tracker.hourly_recap()
+        print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] perp recap -> {rc}")
+    except Exception as e:
+        print(f"  !! perp recap failed: {e}")
 
 
 def _crypto_spike_job():
-    """Fast crypto-derivatives spike check (sub-minute); alerts on short pumps."""
+    """Fast crypto-derivatives spike check (sub-minute); alerts on short pumps.
+    Also runs the perp-setup tracker so TP/stop touches ping promptly."""
     try:
         from dk.jobs import crypto_spike
         res = crypto_spike.run_once()
@@ -46,6 +53,13 @@ def _crypto_spike_job():
             print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] crypto spike -> {res}")
     except Exception as e:
         print(f"  !! crypto spike failed: {e}")
+    try:
+        from dk.analysis import perp_tracker
+        tr = perp_tracker.check()
+        if tr.get("events"):
+            print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] perp tracker -> {tr}")
+    except Exception as e:
+        print(f"  !! perp tracker failed: {e}")
 
 
 def _setup_scan_job():

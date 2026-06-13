@@ -74,6 +74,7 @@ Each component is clipped to [-1, +1], then weighted, then magnitude × 100 = fi
 | **CRYPTO_SPIKE** | A Blofin perp moves ≥ threshold in a short window (e.g. +6%/3min) — fast pump/dump, sub-minute scan |
 | **SETUP_SCAN** | Scheduled perp scanner found a high-R:R, tight-stop setup (leverage in your favor) and pushed it |
 | **THESIS** | A stock with a setup forming (convergence + signal/catalyst) — a forward-looking thesis note pushed to Telegram |
+| **PERP_TRACK** | A pushed perp setup touched a TP rung or its stop — follow-up progress until it resolves (stop or TP3) |
 | **CONVICTION_LONG / SHORT** | Multiple bullish/bearish signals converging on one name (radar convergence) |
 | **RANK_JUMP** | Ticker climbs ≥3 ranks AND current score ≥35 |
 | **SCORE_SURGE** | Opportunity score gains ≥10 points between snapshots |

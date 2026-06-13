@@ -138,6 +138,7 @@ def scan_and_alert(push: bool = True) -> dict:
 
     cooldown_h = int(cfg.get("cooldown_hours", 6))
     new = 0
+    registered = []  # (alert_id, row) to track once the write conn is closed
     store.init_db()
     with store.conn() as c:
         for r in rows:
@@ -157,7 +158,16 @@ def scan_and_alert(push: bool = True) -> dict:
             c.execute(
                 "INSERT INTO alerts (symbol, kind, message, payload) VALUES (?,?,?,?)",
                 (r["inst_id"], "SETUP_SCAN", msg, json.dumps(r)))
+            registered.append((c.lastrowid, r))
             new += 1
+
+    # Register each pushed setup as a tracked signal (separate conn, after close)
+    try:
+        from dk.analysis import perp_tracker
+        for aid, r in registered:
+            perp_tracker.register_signal(aid, r)
+    except Exception as e:
+        print(f"[setup_scan] tracker registration failed: {e}")
 
     summary = {"scanned": True, "candidates": len(rows), "alerts": new}
     if push and new:

@@ -251,6 +251,23 @@ CREATE TABLE IF NOT EXISTS crypto_deriv_ticks (
 );
 CREATE INDEX IF NOT EXISTS idx_deriv_ticks_ts ON crypto_deriv_ticks(ts);
 
+CREATE TABLE IF NOT EXISTS perp_signals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_alert_id INTEGER UNIQUE,   -- the SETUP_SCAN alert that spawned it
+    inst_id TEXT NOT NULL,
+    side TEXT NOT NULL,               -- 'long' | 'short'
+    entry REAL, stop REAL,
+    tp1 REAL, tp2 REAL, tp3 REAL,
+    tp_hits TEXT DEFAULT '',          -- comma list of rungs hit, e.g. 'tp1,tp2'
+    status TEXT DEFAULT 'open',       -- 'open' | 'stopped' | 'tp3'
+    mfe_pct REAL DEFAULT 0,           -- max favorable excursion (% from entry, +)
+    mae_pct REAL DEFAULT 0,           -- max adverse excursion (% from entry, -)
+    last_price REAL,
+    opened_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_perp_signals_status ON perp_signals(status);
+
 CREATE TABLE IF NOT EXISTS daily_briefs (
     brief_date TEXT PRIMARY KEY,         -- one row per market day (idempotent)
     generated_at TEXT DEFAULT CURRENT_TIMESTAMP,

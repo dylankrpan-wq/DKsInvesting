@@ -15,6 +15,7 @@ KIND_EMOJI = {
     "CONVICTION_SHORT": ":dart:",
     "SETUP_SCAN": ":dart:",
     "THESIS": ":clipboard:",
+    "PERP_TRACK": ":bar_chart:",
 }
 
 
