@@ -1,9 +1,11 @@
 """Blofin adapter (READ-ONLY).
 
-Blofin's API uses an HMAC-signed REST request. Endpoints used here:
-  GET /api/v1/asset/balances    -> spot/funding wallet balances
-  GET /api/v1/trade/account     -> futures account equity (totalEquity, details)
-  GET /api/v1/trade/positions   -> open perp positions (size, entry, mark, uPnL…)
+Blofin's API uses an HMAC-signed REST request. Endpoints used here (paths
+verified live — Blofin's published docs mislabel these as /api/v1/trade/*,
+which the API rejects with 152404 "operation not supported"):
+  GET /api/v1/account/balance   -> futures account equity (totalEquity, details)
+  GET /api/v1/account/positions -> open perp positions (size, entry, mark, uPnL…)
+  GET /api/v1/asset/balances    -> wallet balances (requires accountType param)
 
 Credentials in secrets.env (and Railway → Variables):
   BLOFIN_API_KEY=
@@ -116,7 +118,7 @@ class BlofinBroker(Broker):
 
     def fetch_futures_account(self) -> dict | None:
         """Futures account equity. {total_equity, isolated_equity, details[]}."""
-        data = self._signed_get("/api/v1/trade/account")
+        data = self._signed_get("/api/v1/account/balance")
         if data is None:
             return None
         if isinstance(data, list):
@@ -129,7 +131,7 @@ class BlofinBroker(Broker):
 
     def fetch_perp_positions(self) -> list[dict]:
         """Open perp positions, normalized + flat-filtered. Empty list if none."""
-        data = self._signed_get("/api/v1/trade/positions") or []
+        data = self._signed_get("/api/v1/account/positions") or []
         if isinstance(data, dict):  # be tolerant of either shape
             data = data.get("positions") or [data]
         out = [_norm_position(r) for r in data]
@@ -138,18 +140,11 @@ class BlofinBroker(Broker):
     # ---- Broker contract (spot/funding wallet) -----------------------------
 
     def fetch_positions(self) -> list[Position]:
-        """Wallet balances as Positions (Broker contract). READ-ONLY."""
-        path = "/api/v1/asset/balances"
-        headers = self._sign("GET", path)
-        r = requests.get(BASE + path, headers=headers, timeout=15)
-        if r.status_code != 200:
-            raise RuntimeError(f"blofin HTTP {r.status_code}: {r.text[:200]}")
-        data = r.json()
-        if str(data.get("code")) not in ("0",):
-            raise RuntimeError(f"blofin API error: {data.get('msg', data)}")
-
+        """Futures wallet balances as Positions (Broker contract). READ-ONLY.
+        accountType is required by Blofin (omitting it returns 152001)."""
+        data = self._signed_get("/api/v1/asset/balances", {"accountType": "futures"}) or []
         out: list[Position] = []
-        for row in (data.get("data") or []):
+        for row in data:
             currency = row.get("currency") or row.get("ccy") or "?"
             avail = float(row.get("available") or 0) + float(row.get("frozen") or 0)
             if avail <= 0:
