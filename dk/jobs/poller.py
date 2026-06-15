@@ -237,6 +237,26 @@ def _run_once_impl() -> dict:
         print(f"[desk_brief] {e}")
         summary["desk_brief"] = {"error": str(e)}
 
+    # Overnight 'while you slept' digest — template (no Claude), once per trading
+    # day in the ET morning window (futures + overseas + overnight news).
+    # Poller-driven + idempotent (overnight_digests table), no-op outside window.
+    try:
+        from dk.briefing import overnight
+        summary["overnight_digest"] = overnight.maybe_send()
+    except Exception as e:
+        print(f"[overnight_digest] {e}")
+        summary["overnight_digest"] = {"error": str(e)}
+
+    # Pre-open morning brief — Claude-written, once per trading day in the
+    # pre-open window (overnight futures/overseas + pre-market gappers + today's
+    # catalysts). Self-healing/idempotent, no-op outside the window.
+    try:
+        from dk.briefing import morning_brief
+        summary["morning_brief"] = morning_brief.maybe_generate()
+    except Exception as e:
+        print(f"[morning_brief] {e}")
+        summary["morning_brief"] = {"error": str(e)}
+
     print(f"[poller] done: {summary}")
     return summary
 

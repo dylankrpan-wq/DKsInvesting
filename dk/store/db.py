@@ -282,6 +282,22 @@ CREATE TABLE IF NOT EXISTS daily_briefs (
     markdown TEXT,
     context_json TEXT
 );
+
+CREATE TABLE IF NOT EXISTS morning_briefs (
+    brief_date TEXT PRIMARY KEY,         -- one pre-open brief per market day (idempotent)
+    generated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    model TEXT,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    markdown TEXT,
+    context_json TEXT
+);
+
+CREATE TABLE IF NOT EXISTS overnight_digests (
+    digest_date TEXT PRIMARY KEY,        -- one overnight digest per ET day (idempotent)
+    sent_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    chunks INTEGER
+);
 """
 
 

@@ -419,6 +419,29 @@ with tab_now:
             else:
                 st.warning(_res.get("note", "Generation failed."))
 
+    # ---- Pre-open morning brief (Claude-written; overnight tape + pre-market) ----
+    from dk.briefing import morning_brief as _mbrief_mod
+    _mbrief = _mbrief_mod.latest()
+    _mbrief_label = (f"🌅 Pre-open morning brief — {_mbrief['brief_date']}" if _mbrief
+                     else "🌅 Pre-open morning brief")
+    with st.expander(_mbrief_label, expanded=False):
+        if _mbrief:
+            st.markdown(_mbrief["markdown"])
+            st.caption(f"Generated {_mbrief['generated_at']} UTC · {_mbrief['model']} · "
+                       f"grounded in the local DB plus live overnight futures/overseas + "
+                       f"pre-market gappers — the model adds no outside data.")
+        else:
+            st.info("No morning brief yet. One generates automatically in the pre-open "
+                    "window (~08:30 ET) on trading days, or generate one now. Requires "
+                    "`ANTHROPIC_API_KEY` in `config/secrets.env`.")
+        if st.button("✍️ Generate the morning brief now", key="gen_morning_brief"):
+            with st.spinner("Reading the overnight tape and writing the pre-open brief…"):
+                _mres = _mbrief_mod.generate(force=True)
+            if _mres.get("llm"):
+                st.rerun()
+            else:
+                st.warning(_mres.get("note", "Generation failed."))
+
     st.subheader("📡 What matters now")
     st.caption("Your live briefing — synthesized from news, price action, sentiment, power players, "
                "and catalysts. Pointing out what's worth your attention, not telling you what to trade.")

@@ -34,6 +34,7 @@ _KIND_FMT = {
     "CONVICTION_LONG":  ("🎯", "Long setups", 5),
     "CONVICTION_SHORT": ("🎯", "Short setups", 5),
     "SETUP_SCAN":       ("🎯", "Scanner setups", 5),
+    "PREMARKET_GAP":    ("🌅", "Pre-market gaps", 5),
     "HIGH_IMPACT_NEWS": ("⚡", "Breaking", 4),
     "NEWS_VELOCITY":    ("📡", "Live events", 3),
     "PRICE_MOVE":       ("💥", "Movers", 6),
@@ -50,6 +51,7 @@ _KIND_FMT = {
 # Order pulse sections by importance (conviction first, context last).
 _KIND_ORDER = [
     "CONVICTION_LONG", "CONVICTION_SHORT", "CRYPTO_SPIKE", "SETUP_SCAN",
+    "PREMARKET_GAP",
     "HIGH_IMPACT_NEWS", "NEWS_VELOCITY", "PRICE_MOVE", "VOLUME_SPIKE",
     "CRYPTO_MOVE", "RANK_JUMP", "NEW_TOP", "SCORE_SURGE", "PERSON_ACTIVITY",
     "EVENT_NEAR", "TECH_SIGNAL",

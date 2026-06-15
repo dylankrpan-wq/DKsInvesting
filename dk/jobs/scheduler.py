@@ -85,12 +85,32 @@ def _setup_scan_job():
         print(f"  !! setup scan failed: {e}")
 
 
+def _premarket_scan_job():
+    """Pre-market US-equity gap scan; self-gates to the pre-market window so it's
+    a cheap no-op overnight, during RTH, and on weekends/holidays."""
+    try:
+        from dk.jobs import premarket_scan
+        res = premarket_scan.run_once()
+        if res.get("alerts"):
+            print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] premarket scan -> {res}")
+    except Exception as e:
+        print(f"  !! premarket scan failed: {e}")
+
+
 def _setup_scan_minute() -> int:
     try:
         from dk.analysis import perp_scanner
         return perp_scanner.cron_minute()
     except Exception:
         return 30
+
+
+def _premarket_interval_min() -> int:
+    try:
+        from dk.config import load_watchlist
+        return max(5, int((load_watchlist().get("premarket") or {}).get("scan_minutes", 15)))
+    except Exception:
+        return 15
 
 
 def _spike_interval() -> int:
@@ -118,7 +138,7 @@ def start_background_scheduler(run_now: bool = True):
     first_run = datetime.now() if run_now else None
     sched.add_job(_job, IntervalTrigger(minutes=POLL_MINUTES),
                   id="poll", next_run_time=first_run,
-                  max_instances=1, coalesce=True)
+                  max_instances=1, coalesce=True, misfire_grace_time=300)
     # Hourly pulse: top of every hour, 24/7 (sends only when notable).
     # misfire_grace_time=300 so a brief stall at :00 still delivers (the default
     # 1s would silently skip the whole hour since it only fires once).
@@ -128,16 +148,24 @@ def start_background_scheduler(run_now: bool = True):
     # Fast crypto-derivatives spike check (sub-minute).
     spike_s = _spike_interval()
     sched.add_job(_crypto_spike_job, IntervalTrigger(seconds=spike_s),
-                  id="crypto_spike", max_instances=1, coalesce=True)
+                  id="crypto_spike", max_instances=1, coalesce=True,
+                  misfire_grace_time=60)
     # Hourly perp setup scan -> phone (offset from the pulse).
     sched.add_job(_setup_scan_job, CronTrigger(minute=_setup_scan_minute()),
                   id="setup_scan", max_instances=1, coalesce=True,
+                  misfire_grace_time=300)
+    # Pre-market US-equity gap scan (self-gates to the pre-market window).
+    # (The overnight digest + morning brief are poller-driven + ET-gated, so they
+    # live in the poll cycle, not here — DST-correct without APScheduler tz.)
+    pm_min = _premarket_interval_min()
+    sched.add_job(_premarket_scan_job, IntervalTrigger(minutes=pm_min),
+                  id="premarket_scan", max_instances=1, coalesce=True,
                   misfire_grace_time=300)
     sched.start()
     _BG_SCHED = sched
     print(f"[scheduler] in-process scheduler started "
           f"({POLL_MINUTES} min poll + hourly pulse + {spike_s}s crypto spike "
-          f"+ hourly setup scan)")
+          f"+ hourly setup scan + {pm_min}m pre-market scan)")
     return sched
 
 
@@ -175,17 +203,25 @@ def last_poll_info() -> dict:
 
 def main():
     sched = BackgroundScheduler(timezone="UTC")
-    sched.add_job(_job, IntervalTrigger(minutes=POLL_MINUTES), id="poll", next_run_time=datetime.now())
+    sched.add_job(_job, IntervalTrigger(minutes=POLL_MINUTES), id="poll",
+                  next_run_time=datetime.now(), max_instances=1, coalesce=True,
+                  misfire_grace_time=300)
     sched.add_job(_hourly_job, CronTrigger(minute=0), id="hourly_pulse",
                   max_instances=1, coalesce=True, misfire_grace_time=300)
     spike_s = _spike_interval()
     sched.add_job(_crypto_spike_job, IntervalTrigger(seconds=spike_s),
-                  id="crypto_spike", max_instances=1, coalesce=True)
+                  id="crypto_spike", max_instances=1, coalesce=True,
+                  misfire_grace_time=60)
     sched.add_job(_setup_scan_job, CronTrigger(minute=_setup_scan_minute()),
                   id="setup_scan", max_instances=1, coalesce=True, misfire_grace_time=300)
+    pm_min = _premarket_interval_min()
+    sched.add_job(_premarket_scan_job, IntervalTrigger(minutes=pm_min),
+                  id="premarket_scan", max_instances=1, coalesce=True,
+                  misfire_grace_time=300)
     sched.start()
     print(f"DK scheduler running every {POLL_MINUTES} min + hourly pulse "
-          f"+ {spike_s}s crypto spike + hourly setup scan. Ctrl+C to stop.")
+          f"+ {spike_s}s crypto spike + hourly setup scan + {pm_min}m pre-market "
+          f"scan. Ctrl+C to stop.")
 
     stop = False
     def handle(sig, frame):

@@ -153,6 +153,43 @@ setup_scan:
   cooldown_hours: 6          # don't re-push the same pair within this window
   side: both                 # both | long | short
 
+# 🌅 Pre-market US-equity gap scan — runs every scan_minutes during the pre-market
+# window (4:00-9:45 ET, trading days only) and texts gappers. Watchlist names use
+# a lower threshold than off-list market movers. Keyless (yfinance prepost bars).
+# Requires the scheduler running.
+premarket:
+  enabled: true
+  scan_minutes: 15           # how often to scan during the pre-market window
+  watchlist_min_pct: 2.0     # |gap %| to alert a watchlist name
+  movers_min_pct: 4.0        # |gap %| to alert an off-list big mover
+  include_movers: true       # also scan the day's market-wide movers
+  max_movers: 30             # cap the off-list universe per scan
+  max_alerts: 6              # most gappers to push per scan
+  cooldown_minutes: 90       # don't re-alert the same symbol within this
+
+# 🌙 Overnight "while you slept" digest — a template (no Claude) recap texted on
+# trading-day mornings: US index futures + overseas indices + overnight breaking
+# news. Poller-driven + ET-anchored (DST-correct) + idempotent, so it sends once.
+overnight:
+  enabled: true
+  hour_et: 6                 # fires at/after 06:30 ET on trading-day mornings
+  minute: 30
+  window_hours: 3            # self-heal: still sends if the 06:30 poll was missed
+  headline_hours: 14         # overnight news lookback window
+  max_headlines: 8
+
+# 🌅 Pre-open morning brief — Claude-written AM counterpart to the desk brief,
+# generated once per trading day in the pre-open window: overnight futures/overseas
+# + pre-market gappers + today's earnings/macro + setups into the open. Poller-
+# driven + ET-anchored (DST-correct) + idempotent. Needs ANTHROPIC_API_KEY.
+morning_brief:
+  enabled: true
+  hour_et: 8                 # pre-open window starts 08:30 ET (before the 09:30 open)
+  minute: 30
+  window_hours: 2.5          # generate if within this many hours of hour:minute (self-heals)
+  model: claude-opus-4-8
+  send_to_phone: true
+
 # 📊 Hourly pulse — a consolidated activity summary texted at the top of each
 # hour, 24/7, but ONLY when the prior hour had notable activity (conviction
 # setups, movers, breaking news, crypto moves, rank changes). Quiet hours stay
@@ -187,6 +224,7 @@ sms:
     - CONVICTION_SHORT
     - CRYPTO_SPIKE
     - SETUP_SCAN
+    - PREMARKET_GAP
     - HIGH_IMPACT_NEWS
     - NEWS_VELOCITY
     - PERSON_ACTIVITY

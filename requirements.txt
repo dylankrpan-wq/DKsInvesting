@@ -13,3 +13,4 @@ tradingview-ta>=3.3.0
 numpy>=2.0
 anthropic>=0.109
 statsmodels>=0.14    # pair-trade cointegration (Engle-Granger); pulls scipy
+tzdata>=2024.1       # zoneinfo tz database for the US market-session clock (dk/util/session.py)
