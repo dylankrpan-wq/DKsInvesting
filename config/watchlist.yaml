@@ -147,11 +147,21 @@ thesis_push:
 setup_scan:
   enabled: true
   cron_minute: 30            # runs at HH:30, offset from the hourly pulse at HH:00
+  # --- PUSH bar (what actually texts your phone) ---
   top_n: 2                   # most to push per run
   min_rr: 4.0                # only push setups with R:R >= this (manual scan uses 2.5)
   max_risk_pct: 3.0          # ...and stop within this % of entry (tight = leverage-friendly)
   cooldown_hours: 6          # don't re-push the same pair within this window
   side: both                 # both | long | short
+  # --- TRACK bar (silent SETUP_TRACK rows the scorecard scores, NOT pushed) ---
+  # Builds a 10-20/day sample to learn what wins. Wider net, lower bar; the
+  # phone still only gets the PUSH subset above. Tune track_top_n × scans/day.
+  track_top_n: 6             # silent setups to record per scan (≈10-20/day w/ cooldown)
+  track_universe: 20         # rank up to this many that clear the track bar
+  track_deep: 40             # deep-analyze this many of the most volatile perps
+  track_min_rr: 2.5          # track setups with R:R >= this (vs push 4.0)
+  track_max_risk_pct: 5.0    # ...and risk <= this (vs push 3.0)
+  track_cooldown_hours: 3    # don't re-track the same pair within this window
 
 # 🌅 Pre-market US-equity gap scan — runs every scan_minutes during the pre-market
 # window (4:00-9:45 ET, trading days only) and texts gappers. Watchlist names use

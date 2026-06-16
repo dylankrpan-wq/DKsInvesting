@@ -77,6 +77,10 @@ def scan(top_n: int = 10, max_deep: int = 25, min_vol_usd: float = 300_000,
             "chg_24h_pct": a.get("chg_24h_pct"), "off_high_pct": a.get("off_high_pct"),
             "funding_pct": fund, "funding_tailwind": tailwind,
             "invalidation": a.get(f"invalidation_{sd}"),
+            # extra features captured for the scorecard's win/loss bucket analysis
+            "atr_pct": a.get("atr_pct"), "vs_ma_pct": a.get("vs_ma_pct"),
+            "above_low_pct": a.get("above_low_pct"), "range24_pct": a.get("range24_pct"),
+            "last_vol_x": a.get("last_vol_x"),
         })
         time.sleep(0.08)  # be polite to the public endpoint
 
@@ -129,43 +133,80 @@ def _setup_msg(r: dict) -> str:
 
 
 def scan_and_alert(push: bool = True) -> dict:
-    """Scheduled entry: scan with a HIGH bar (only standout setups), emit a
-    SETUP_SCAN alert per fresh one (per-symbol cooldown), then push the phone.
-    No-op when disabled or no phone channel."""
+    """Scheduled entry. Scans a WIDE net at a lower 'track' bar, then:
+      • PUSHES the top few that clear the HIGH push bar -> SETUP_SCAN alerts
+        (phone + chart + live TP/stop tracking), as before.
+      • silently TRACKS the rest -> SETUP_TRACK rows (never pushed, sms_sent=1),
+        so the call-out scorecard scores 10-20/day and we learn what actually
+        wins without spamming the phone.
+    Tracking runs even with no phone channel; only the push needs one."""
     from dk.store import db as store
     cfg = _cfg()
     if not cfg.get("enabled", True):
         return {"skipped": "disabled"}
     from dk.notify import sms
-    if not sms.is_configured():
-        return {"skipped": "no phone channel"}
+    phone = sms.is_configured()
 
-    rows = scan(top_n=int(cfg.get("top_n", 2)),
-                min_rr=float(cfg.get("min_rr", 4.0)),
-                max_risk_pct=float(cfg.get("max_risk_pct", 3.0)),
-                side=cfg.get("side", "both"))
-    if not rows:
-        return {"scanned": True, "alerts": 0, "note": "no standout setups"}
+    # Wide net at the track bar (lower R:R / higher risk%) — the research universe.
+    track_rows = scan(top_n=int(cfg.get("track_universe", 20)),
+                      max_deep=int(cfg.get("track_deep", 40)),
+                      min_rr=float(cfg.get("track_min_rr", 2.5)),
+                      max_risk_pct=float(cfg.get("track_max_risk_pct", 5.0)),
+                      side=cfg.get("side", "both"))
+    if not track_rows:
+        return {"scanned": True, "pushed": 0, "tracked": 0, "note": "no setups clear the track bar"}
 
-    cooldown_h = int(cfg.get("cooldown_hours", 6))
-    new = 0
-    registered = []  # (alert_id, row) to track once the write conn is closed
+    push_min_rr = float(cfg.get("min_rr", 4.0))
+    push_max_risk = float(cfg.get("max_risk_pct", 3.0))
+    push_n = int(cfg.get("top_n", 2))
+    track_n = int(cfg.get("track_top_n", 6))
+    push_cd = int(cfg.get("cooldown_hours", 6))
+    track_cd = int(cfg.get("track_cooldown_hours", 3))
+
+    push_pool = [r for r in track_rows
+                 if r["rr1"] >= push_min_rr and r["risk_pct"] <= push_max_risk]
+
+    new = 0          # SETUP_SCAN (pushed) count
+    tracked = 0      # SETUP_TRACK (silent) count
+    pushed_ids: set[str] = set()
+    registered = []  # (alert_id, row) for the pushed ones — tracked live after conn closes
     store.init_db()
     with store.conn() as c:
-        for r in rows:
+        # PUSH: top push_n standouts, fresh per the push cooldown
+        for r in push_pool:
+            if new >= push_n:
+                break
             recent = c.execute(
                 """SELECT 1 FROM alerts WHERE symbol=? AND kind='SETUP_SCAN'
                    AND created_at >= datetime('now', ?) LIMIT 1""",
-                (r["inst_id"], f"-{cooldown_h} hours")).fetchone()
+                (r["inst_id"], f"-{push_cd} hours")).fetchone()
             if recent:
                 continue
             c.execute(
                 "INSERT INTO alerts (symbol, kind, message, payload) VALUES (?,?,?,?)",
                 (r["inst_id"], "SETUP_SCAN", _setup_msg(r), json.dumps(r)))
             registered.append((c.lastrowid, r))
+            pushed_ids.add(r["inst_id"])
             new += 1
+        # TRACK: up to track_n more (not already pushed), fresh per the track
+        # cooldown, as silent SETUP_TRACK rows (sms_sent=1 so the digest skips them).
+        for r in track_rows:
+            if tracked >= track_n:
+                break
+            if r["inst_id"] in pushed_ids:
+                continue
+            recent = c.execute(
+                """SELECT 1 FROM alerts WHERE symbol=? AND kind IN ('SETUP_SCAN','SETUP_TRACK')
+                   AND created_at >= datetime('now', ?) LIMIT 1""",
+                (r["inst_id"], f"-{track_cd} hours")).fetchone()
+            if recent:
+                continue
+            c.execute(
+                "INSERT INTO alerts (symbol, kind, message, payload, sms_sent) VALUES (?,?,?,?,1)",
+                (r["inst_id"], "SETUP_TRACK", _setup_msg(r), json.dumps(r)))
+            tracked += 1
 
-    # Register each pushed setup as a tracked signal (separate conn, after close)
+    # Register each PUSHED setup as a live tracked signal (separate conn, after close)
     try:
         from dk.analysis import perp_tracker
         for aid, r in registered:
@@ -178,7 +219,7 @@ def scan_and_alert(push: bool = True) -> dict:
     # sms_sent=1 so the text digest below doesn't also send it. If image export
     # is unavailable (no kaleido/Chrome), the setup falls through to the text digest.
     charts_pushed = 0
-    if push and registered and cfg.get("push_charts", True):
+    if push and phone and registered and cfg.get("push_charts", True):
         try:
             from dk.charts import perp_fig
             for aid, r in registered:
@@ -190,9 +231,9 @@ def scan_and_alert(push: bool = True) -> dict:
         except Exception as e:
             print(f"[setup_scan] chart push failed: {e}")
 
-    summary = {"scanned": True, "candidates": len(rows), "alerts": new,
-               "charts_pushed": charts_pushed}
-    if push and new:
+    summary = {"scanned": True, "candidates": len(track_rows), "pushed": new,
+               "tracked": tracked, "charts_pushed": charts_pushed}
+    if push and phone and new:
         try:
             summary["push"] = sms.push_digest()
         except Exception as e:

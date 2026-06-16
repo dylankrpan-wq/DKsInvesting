@@ -137,11 +137,11 @@ def build_context() -> dict:
         utc_today = _utc_today()
         ctx["alerts_today_counts"] = [dict(r) for r in c.execute(
             """SELECT kind, COUNT(*) n FROM alerts
-               WHERE substr(created_at, 1, 10) = ?
+               WHERE substr(created_at, 1, 10) = ? AND kind != 'SETUP_TRACK'
                GROUP BY kind ORDER BY n DESC""", (utc_today,))]
         ctx["alerts_today_detail"] = [dict(r) for r in c.execute(
             """SELECT kind, symbol, message, created_at FROM alerts
-               WHERE substr(created_at, 1, 10) = ?
+               WHERE substr(created_at, 1, 10) = ? AND kind != 'SETUP_TRACK'
                ORDER BY created_at DESC LIMIT 30""", (utc_today,))]
 
         ctx["trending"] = [dict(r) for r in c.execute(

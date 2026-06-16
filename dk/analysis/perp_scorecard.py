@@ -158,10 +158,12 @@ def reconstruct(inst_id: str, side: str, entry: float, stop: float,
 
 
 def _callouts(c) -> list:
-    """All pushed SETUP_SCAN call-outs with parsed payloads, oldest first."""
+    """All call-outs (pushed SETUP_SCAN + silently-tracked SETUP_TRACK) with
+    parsed payloads + captured features, oldest first. `pushed` flags the ones
+    that actually went to the phone vs. the wider research-tracked set."""
     rows = c.execute(
-        "SELECT id, symbol, payload, created_at FROM alerts "
-        "WHERE kind='SETUP_SCAN' ORDER BY created_at").fetchall()
+        "SELECT id, symbol, kind, payload, created_at FROM alerts "
+        "WHERE kind IN ('SETUP_SCAN','SETUP_TRACK') ORDER BY created_at").fetchall()
     out = []
     for r in rows:
         try:
@@ -174,7 +176,12 @@ def _callouts(c) -> list:
                     "side": p.get("side"), "entry": p["entry"], "stop": p["stop"],
                     "tps": [t.get("level") for t in (p.get("tps") or [])],
                     "rr1": p.get("rr1"), "risk_pct": p.get("risk_pct"),
-                    "opened_at": r["created_at"]})
+                    "opened_at": r["created_at"],
+                    "pushed": 1 if r["kind"] == "SETUP_SCAN" else 0,
+                    # features for win/loss bucket analysis
+                    "phase": p.get("phase"), "funding_tailwind": int(bool(p.get("funding_tailwind"))),
+                    "off_high_pct": p.get("off_high_pct"), "atr_pct": p.get("atr_pct"),
+                    "vs_ma_pct": p.get("vs_ma_pct"), "last_vol_x": p.get("last_vol_x")})
     return out
 
 
@@ -193,7 +200,9 @@ def build_ledger(refresh_resolved: bool = False, push_outcomes: bool = False) ->
     for co in callouts:
         prev = cached.get(co["alert_id"])
         if prev and prev.get("resolved") and not refresh_resolved:
-            results.append(prev)
+            # merge: outcome from the frozen cached row, features from the alert
+            # payload (the cached row predates the feature columns), pushed flag too
+            results.append({**co, **prev})
             continue
         opened_ms = datetime.fromisoformat(co["opened_at"]).replace(
             tzinfo=timezone.utc).timestamp() * 1000
@@ -247,7 +256,71 @@ def summary(rows: list[dict]) -> dict:
         "avg_mfe_pct": round(avg_mfe, 2), "avg_mae_pct": round(avg_mae, 2),
         "expectancy_r": round(expectancy, 2) if expectancy is not None else None,
         "total_r": round(sum(rr), 2) if rr else 0.0,
+        "pushed": sum(1 for r in rows if r.get("pushed")),
+        "tracked": sum(1 for r in rows if not r.get("pushed")),
     }
+
+
+def _band(v, edges):
+    """Map a value to a labeled band. edges = [(upper, label), ...]; an upper of
+    None is the catch-all top band. Returns None if v is None."""
+    if v is None:
+        return None
+    for upper, label in edges:
+        if upper is None or v < upper:
+            return label
+    return None
+
+
+def _grp_stats(g: list[dict]) -> dict:
+    decided = [r for r in g if r.get("status") in ("WIN", "LOSS")]
+    wins = sum(1 for r in decided if r["status"] == "WIN")
+    rr = [r["realized_r"] for r in g if r.get("realized_r") is not None]
+    return {
+        "n": len(g),
+        "win_rate": round(wins / len(decided) * 100, 1) if decided else None,
+        "exp": round(sum(rr) / len(rr), 2) if rr else None,
+        "total_r": round(sum(rr), 1) if rr else 0.0,
+    }
+
+
+def feature_report(rows: list[dict]) -> str:
+    """Bucket resolved call-outs by feature → win-rate / expectancy / total R, so
+    we can see which conditions actually predict winners and tighten the live
+    push criteria on evidence (not vibes)."""
+    res = [r for r in rows if r.get("status") in ("WIN", "LOSS", "EXPIRED")]
+    if len(res) < 4:
+        return ("_Feature analysis needs more resolved call-outs (have "
+                f"{len(res)}). It fills in as the tracked sample grows._")
+    dims = [
+        ("Side", lambda r: r.get("side")),
+        ("Funding", lambda r: "tailwind" if r.get("funding_tailwind") else "neutral/against"),
+        ("R:R (rr1)", lambda r: _band(r.get("rr1"), [(3, "<3"), (5, "3-5"), (None, "5+")])),
+        ("Risk %", lambda r: _band(r.get("risk_pct"), [(1, "<1%"), (2, "1-2%"), (None, "2%+")])),
+        ("1H ATR %", lambda r: _band(r.get("atr_pct"), [(3, "<3%"), (8, "3-8%"), (None, "8%+")])),
+        ("Phase", lambda r: r.get("phase")),
+    ]
+    L = ["**🔬 What's winning — feature breakdown** (resolved call-outs, best buckets first)", ""]
+    for name, fn in dims:
+        groups: dict = {}
+        for r in res:
+            k = fn(r)
+            if k is None:
+                continue
+            groups.setdefault(k, []).append(r)
+        if not groups:
+            continue
+        L.append(f"**{name}**")
+        L.append("| bucket | n | win% | exp R | total R |")
+        L.append("|---|--:|--:|--:|--:|")
+        for k, g in sorted(groups.items(), key=lambda kv: -(_grp_stats(kv[1])["exp"] or -99)):
+            s = _grp_stats(g)
+            wr = f"{s['win_rate']}%" if s["win_rate"] is not None else "—"
+            ex = f"{s['exp']:+}" if s["exp"] is not None else "—"
+            L.append(f"| {k} | {s['n']} | {wr} | {ex} | {s['total_r']:+} |")
+        L.append("")
+    L.append("_Sorted by expectancy. Small samples are noisy — let counts build before tightening filters._")
+    return "\n".join(L)
 
 
 def render_markdown(rows: list[dict], stats: dict) -> str:
@@ -256,9 +329,10 @@ def render_markdown(rows: list[dict], stats: dict) -> str:
          ""]
     wr = f"{stats['win_rate_pct']}%" if stats["win_rate_pct"] is not None else "—"
     exp = f"{stats['expectancy_r']:+}R" if stats["expectancy_r"] is not None else "—"
-    L.append(f"**{stats['total']} call-outs** · {stats['wins']}W / {stats['losses']}L / "
-             f"{stats['open']} open · win-rate {wr} (of decided) · "
-             f"expectancy {exp} · total {stats['total_r']:+}R")
+    L.append(f"**{stats['total']} call-outs** "
+             f"({stats.get('pushed', 0)} pushed · {stats.get('tracked', 0)} tracked) · "
+             f"{stats['wins']}W / {stats['losses']}L / {stats['open']} open · "
+             f"win-rate {wr} (of decided) · expectancy {exp} · total {stats['total_r']:+}R")
     L.append(f"avg MFE {stats['avg_mfe_pct']:+}% · avg MAE {stats['avg_mae_pct']:+}%")
     L += ["", "| When (UTC) | Pair | Side | Status | MaxTP | MFE | MAE | Now | Real R |",
           "|---|---|---|---|---|---|---|---|---|"]
@@ -298,3 +372,4 @@ if __name__ == "__main__":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     rows = build_ledger(refresh_resolved=True)
     print(render_markdown(rows, summary(rows)))
+    print("\n" + feature_report(rows))

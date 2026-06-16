@@ -64,7 +64,7 @@ def build() -> str:
 
         # Today's alerts breakdown
         alerts = c.execute("""SELECT kind, COUNT(*) n FROM alerts
-                              WHERE substr(created_at, 1, 10) = ?
+                              WHERE substr(created_at, 1, 10) = ? AND kind != 'SETUP_TRACK'
                               GROUP BY kind ORDER BY n DESC""", (today,)).fetchall()
         if alerts:
             sections.append("**Alerts fired today** — " + " · ".join(

@@ -2131,9 +2131,14 @@ with tab_crypto:
                          f"{_stats['win_rate_pct']}%" if _stats["win_rate_pct"] is not None else "—")
             sc[4].metric("Expectancy",
                          f"{_stats['expectancy_r']:+}R" if _stats["expectancy_r"] is not None else "—")
+            st.caption(f"{_stats.get('pushed', 0)} pushed to phone · "
+                       f"{_stats.get('tracked', 0)} silently tracked (research sample).")
             st.markdown(_scard.render_markdown(_scrows, _stats))
+            with st.expander("🔬 What's winning — feature breakdown", expanded=False):
+                st.markdown(_scard.feature_report(_scrows))
         else:
-            st.info("No call-outs pushed yet — they'll appear here once the scanner fires.")
+            st.info("No call-outs yet — they'll appear here once the scanner fires "
+                    "(pushed setups + the wider silently-tracked sample).")
     except Exception as e:
         st.warning(f"Scorecard unavailable: {e}")
     st.markdown("---")
