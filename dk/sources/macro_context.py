@@ -24,6 +24,8 @@ def fetch_all() -> int:
                 continue
             last = float(hist["Close"].iloc[-1])
             prev = float(hist["Close"].iloc[-2])
+            if last != last or prev != prev:  # NaN (incomplete/glitched bar) — skip, don't store None
+                continue
             chg = (last - prev) / prev * 100 if prev else 0.0
             rows.append({
                 "symbol": sym, "label": label,

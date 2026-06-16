@@ -17,9 +17,12 @@ def build() -> str:
         if macro:
             risk_words = []
             for m in macro:
-                arrow = "▲" if (m["chg_pct"] or 0) >= 0 else "▼"
+                if m["chg_pct"] is None:  # skip rows with no change yet (mirrors hourly pulse)
+                    continue
+                arrow = "▲" if m["chg_pct"] >= 0 else "▼"
                 risk_words.append(f"{m['label']} {arrow}{abs(m['chg_pct']):.2f}%")
-            sections.append("**Macro tape** — " + " · ".join(risk_words))
+            if risk_words:
+                sections.append("**Macro tape** — " + " · ".join(risk_words))
 
         # Top movers (rank delta)
         movers = c.execute("""
