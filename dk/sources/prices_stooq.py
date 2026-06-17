@@ -60,7 +60,9 @@ def fetch_prices(symbol: str, max_bars: int = 130) -> int:
                 except (TypeError, ValueError):
                     return None
             rows.append({
-                "ts": f"{d}T00:00:00",
+                # bare calendar date — MUST match prices_yfinance's daily ts form
+                # so the (symbol, ts) PK collapses to one row/day across sources.
+                "ts": d,
                 "open": _f("Open"),
                 "high": _f("High"),
                 "low": _f("Low"),

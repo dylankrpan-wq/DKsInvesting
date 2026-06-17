@@ -9,10 +9,16 @@ def _fetch_yfinance(symbol: str, period: str, interval: str) -> int:
         hist = t.history(period=period, interval=interval, auto_adjust=False)
         if hist.empty:
             return 0
+        # For daily-or-coarser bars, key the row by the bare calendar date so the
+        # (symbol, ts) PRIMARY KEY collapses one row per day regardless of the
+        # tz-aware offset yfinance emits (which also flips -04:00/-05:00 across DST)
+        # and regardless of source — otherwise yfinance vs Stooq writes desync into
+        # ~2 rows/day and corrupt the MA/RSI/RS lookbacks.
+        daily = interval.endswith(("d", "wk", "mo"))
         rows = []
         for ts, row in hist.iterrows():
             rows.append({
-                "ts": ts.isoformat(),
+                "ts": ts.date().isoformat() if daily else ts.isoformat(),
                 "open": float(row["Open"]) if row["Open"] == row["Open"] else None,
                 "high": float(row["High"]) if row["High"] == row["High"] else None,
                 "low": float(row["Low"]) if row["Low"] == row["Low"] else None,
@@ -38,7 +44,9 @@ def fetch_prices(symbol: str, period: str = "3mo", interval: str = "1d") -> int:
     # Fallback — only daily bars from Stooq, which is fine for our 3mo history.
     try:
         from dk.sources import prices_stooq
-        n2 = prices_stooq.fetch_prices(symbol)
+        # 260 bars so the 200-day MA + ~6mo relative-strength window have history
+        # (the default 130 can't form a 200-day MA → no long-term equity ideas).
+        n2 = prices_stooq.fetch_prices(symbol, max_bars=260)
         if n2 > 0:
             print(f"[prices] {symbol}: yfinance empty, Stooq fallback wrote {n2} bars")
         return n2

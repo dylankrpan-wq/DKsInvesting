@@ -97,6 +97,25 @@ def _premarket_scan_job():
         print(f"  !! premarket scan failed: {e}")
 
 
+def _equity_ideas_job():
+    """Scan the broad equity universe for multi-horizon ideas; push the best few
+    with a Claude thesis, silently track the rest. Trading-day gated inside."""
+    try:
+        from dk.analysis import equity_ideas
+        res = equity_ideas.scan_and_alert()
+        print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] equity ideas -> {res}")
+    except Exception as e:
+        print(f"  !! equity ideas failed: {e}")
+
+
+def _equity_scan_hours() -> str:
+    try:
+        from dk.config import load_watchlist
+        return str((load_watchlist().get("equity_ideas") or {}).get("scan_hours_utc", "14,18"))
+    except Exception:
+        return "14,18"
+
+
 def _setup_scan_minute() -> int:
     try:
         from dk.analysis import perp_scanner
@@ -161,11 +180,33 @@ def start_background_scheduler(run_now: bool = True):
     sched.add_job(_premarket_scan_job, IntervalTrigger(minutes=pm_min),
                   id="premarket_scan", max_instances=1, coalesce=True,
                   misfire_grace_time=300)
+    # Equity multi-horizon idea scan -> phone (with theses), trading days only.
+    eq_hours = _equity_scan_hours()
+    sched.add_job(_equity_ideas_job, CronTrigger(hour=eq_hours, minute=15),
+                  id="equity_ideas", max_instances=1, coalesce=True,
+                  misfire_grace_time=600)
     sched.start()
     _BG_SCHED = sched
+    # Catch-up: if we booted (deploy/restart) during RTH on a trading day and no
+    # equity ideas have gone out today, run one now — otherwise a restart landing
+    # between the two cron times means no ideas until the next slot. The 24h
+    # cooldown + _fresh guard make a catch-up safe (no duplicate pushes).
+    try:
+        import sqlite3
+        from dk.util import session
+        from dk.config import DB_PATH
+        if session.is_trading_day() and session.is_rth():
+            with sqlite3.connect(DB_PATH) as _c:
+                done = _c.execute("SELECT 1 FROM alerts WHERE kind='EQUITY_IDEA' "
+                                  "AND created_at >= date('now') LIMIT 1").fetchone()
+            if not done:
+                sched.modify_job("equity_ideas", next_run_time=datetime.now())
+                print("[scheduler] equity-ideas catch-up scheduled (RTH, none yet today)")
+    except Exception as e:
+        print(f"[scheduler] equity-ideas catch-up skipped: {e}")
     print(f"[scheduler] in-process scheduler started "
           f"({POLL_MINUTES} min poll + hourly pulse + {spike_s}s crypto spike "
-          f"+ hourly setup scan + {pm_min}m pre-market scan)")
+          f"+ hourly setup scan + {pm_min}m pre-market scan + equity ideas @{eq_hours}h UTC)")
     return sched
 
 
@@ -202,6 +243,14 @@ def last_poll_info() -> dict:
 
 
 def main():
+    # Mutually exclusive with the dashboard's in-process scheduler. Running both
+    # against the same DB = two schedulers firing every job = duplicate phone
+    # pushes (and a register race). Refuse so the operator can't do it by accident.
+    if os.getenv("DK_INPROCESS_SCHEDULER") == "1":
+        print("[scheduler] refusing to start: DK_INPROCESS_SCHEDULER=1 means the "
+              "dashboard already runs the in-process scheduler. Unset it to run "
+              "this standalone scheduler, or just run the dashboard.")
+        return
     sched = BackgroundScheduler(timezone="UTC")
     sched.add_job(_job, IntervalTrigger(minutes=POLL_MINUTES), id="poll",
                   next_run_time=datetime.now(), max_instances=1, coalesce=True,
@@ -218,10 +267,14 @@ def main():
     sched.add_job(_premarket_scan_job, IntervalTrigger(minutes=pm_min),
                   id="premarket_scan", max_instances=1, coalesce=True,
                   misfire_grace_time=300)
+    eq_hours = _equity_scan_hours()
+    sched.add_job(_equity_ideas_job, CronTrigger(hour=eq_hours, minute=15),
+                  id="equity_ideas", max_instances=1, coalesce=True,
+                  misfire_grace_time=600)
     sched.start()
     print(f"DK scheduler running every {POLL_MINUTES} min + hourly pulse "
           f"+ {spike_s}s crypto spike + hourly setup scan + {pm_min}m pre-market "
-          f"scan. Ctrl+C to stop.")
+          f"scan + equity ideas @{eq_hours}h UTC. Ctrl+C to stop.")
 
     stop = False
     def handle(sig, frame):

@@ -29,6 +29,13 @@ _LEADING_GLYPHS = re.compile(r"^[^\w$+\-.]+")
 # conviction setup) is meaningful on its own.
 _LOW_SIGNAL_KINDS = {"TECH_SIGNAL"}
 
+# Silent tracking rows: written sms_sent=1 but never a live/instant kind, so the
+# per-cycle digest skips them. They're scorecard-only (absent from _KIND_ORDER /
+# _KIND_FMT, so never rendered here) and must NOT make an hour "notable" —
+# otherwise they'd trigger a near-empty pulse in an otherwise-quiet hour. Mirrors
+# the daily-digest / desk-brief exclusion set.
+_SILENT_KINDS = {"SETUP_TRACK", "EQUITY_IDEA", "EQUITY_IDEA_TRACK"}
+
 # Compact per-kind formatting: (emoji, short label, max items shown).
 _KIND_FMT = {
     "CONVICTION_LONG":  ("🎯", "Long setups", 5),
@@ -114,6 +121,8 @@ def build_summary(window_min: int = 60, max_per_kind: int = 5,
     by_kind: dict[str, list[sqlite3.Row]] = {}
     seen: set[tuple] = set()
     for r in rows:
+        if r["kind"] in _SILENT_KINDS:
+            continue  # scorecard-only tracking rows never count toward "notable"
         if r["kind"] in instant_kinds and r["sms_sent"]:
             continue
         key = (r["symbol"], r["kind"])

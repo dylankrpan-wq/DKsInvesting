@@ -19,11 +19,15 @@ def _series(symbol: str, limit: int = 260):
             "SELECT ts, high, low, close, volume FROM prices WHERE symbol=? ORDER BY ts ASC",
             (symbol,),
         ).fetchall()
-    rows = rows[-limit:]
-    closes = np.array([r[3] for r in rows if r[3] is not None], dtype=float)
-    highs = np.array([r[1] for r in rows if r[1] is not None], dtype=float)
-    lows = np.array([r[2] for r in rows if r[2] is not None], dtype=float)
-    vols = np.array([r[4] for r in rows if r[4] is not None], dtype=float)
+    # Filter once on close-present rows so closes/highs/lows/vols stay the SAME
+    # length (per-column null-filtering would desync them and break any future
+    # vectorized high/low-vs-close op, the way it bit ta._atr). Fall back to close
+    # for a missing high/low, 0 for missing volume.
+    rows = [r for r in rows[-limit:] if r[3] is not None]
+    closes = np.array([r[3] for r in rows], dtype=float)
+    highs = np.array([r[1] if r[1] is not None else r[3] for r in rows], dtype=float)
+    lows = np.array([r[2] if r[2] is not None else r[3] for r in rows], dtype=float)
+    vols = np.array([r[4] if r[4] is not None else 0.0 for r in rows], dtype=float)
     return closes, highs, lows, vols
 
 

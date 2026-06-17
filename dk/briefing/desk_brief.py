@@ -135,14 +135,15 @@ def build_context() -> dict:
                ORDER BY is_breaking DESC, ABS(sentiment) DESC LIMIT 15""")]
 
         utc_today = _utc_today()
+        _excl = "('SETUP_TRACK','EQUITY_IDEA','EQUITY_IDEA_TRACK')"
         ctx["alerts_today_counts"] = [dict(r) for r in c.execute(
-            """SELECT kind, COUNT(*) n FROM alerts
-               WHERE substr(created_at, 1, 10) = ? AND kind != 'SETUP_TRACK'
-               GROUP BY kind ORDER BY n DESC""", (utc_today,))]
+            f"""SELECT kind, COUNT(*) n FROM alerts
+                WHERE substr(created_at, 1, 10) = ? AND kind NOT IN {_excl}
+                GROUP BY kind ORDER BY n DESC""", (utc_today,))]
         ctx["alerts_today_detail"] = [dict(r) for r in c.execute(
-            """SELECT kind, symbol, message, created_at FROM alerts
-               WHERE substr(created_at, 1, 10) = ? AND kind != 'SETUP_TRACK'
-               ORDER BY created_at DESC LIMIT 30""", (utc_today,))]
+            f"""SELECT kind, symbol, message, created_at FROM alerts
+                WHERE substr(created_at, 1, 10) = ? AND kind NOT IN {_excl}
+                ORDER BY created_at DESC LIMIT 30""", (utc_today,))]
 
         ctx["trending"] = [dict(r) for r in c.execute(
             """SELECT symbol, source, mention_count, sentiment, fetched_at

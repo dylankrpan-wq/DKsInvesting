@@ -370,6 +370,29 @@ def _migrate(conn) -> None:
             pass  # column already exists, or the table doesn't exist yet
 
 
+_PRICES_TS_MIGRATED = False
+
+
+def _migrate_prices_ts(conn) -> None:
+    """One-time (per process): collapse any daily-bar ts that carries a time/tz
+    suffix down to a bare calendar date, deduping to one row per (symbol, day).
+    Daily price writers now key by date (YYYY-MM-DD); this normalizes rows written
+    by the old tz-aware/naive forms so yfinance↔Stooq don't accumulate ~2 rows/day
+    (which would corrupt MA/RSI/relative-strength lookbacks). Cheap no-op once clean."""
+    global _PRICES_TS_MIGRATED
+    if _PRICES_TS_MIGRATED:
+        return
+    try:
+        n = conn.execute("SELECT COUNT(*) FROM prices WHERE length(ts) > 10").fetchone()[0]
+        if n:
+            conn.execute("""DELETE FROM prices WHERE rowid NOT IN (
+                                SELECT MAX(rowid) FROM prices GROUP BY symbol, substr(ts, 1, 10))""")
+            conn.execute("UPDATE prices SET ts = substr(ts, 1, 10) WHERE length(ts) > 10")
+        _PRICES_TS_MIGRATED = True
+    except Exception as e:
+        print(f"[db] prices ts migration skipped: {e}")
+
+
 def init_db() -> None:
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
@@ -377,6 +400,7 @@ def init_db() -> None:
             _enable_wal(conn)
         _migrate(conn)          # add missing columns first
         conn.executescript(SCHEMA)  # then tables + indexes (incl. is_breaking index)
+        _migrate_prices_ts(conn)    # normalize legacy daily-bar ts to date keys
 
 
 @contextmanager

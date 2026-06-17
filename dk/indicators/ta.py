@@ -120,12 +120,16 @@ def compute(symbol: str) -> TASnapshot:
     if not rows or len(rows) < 5:
         return snap
 
-    highs = np.array([r[2] for r in rows if r[2] is not None], dtype=float)
-    lows = np.array([r[3] for r in rows if r[3] is not None], dtype=float)
-    closes = np.array([r[4] for r in rows if r[4] is not None], dtype=float)
-    vols = np.array([r[5] for r in rows if r[5] is not None], dtype=float)
-    if len(closes) < 5:
+    # Keep only bars with a full OHLC so highs/lows/closes stay the SAME length —
+    # otherwise per-column null-filtering desyncs them and _atr's vectorized
+    # true-range (highs[1:] - closes[:-1]) hits a broadcast-shape mismatch.
+    ohlc = [r for r in rows if r[2] is not None and r[3] is not None and r[4] is not None]
+    if len(ohlc) < 5:
         return snap
+    highs = np.array([r[2] for r in ohlc], dtype=float)
+    lows = np.array([r[3] for r in ohlc], dtype=float)
+    closes = np.array([r[4] for r in ohlc], dtype=float)
+    vols = np.array([r[5] if r[5] is not None else 0.0 for r in ohlc], dtype=float)
 
     snap.last_close = float(closes[-1])
     snap.sma20 = float(_sma(closes, 20)[-1]) if len(closes) >= 20 else None
@@ -139,8 +143,11 @@ def compute(symbol: str) -> TASnapshot:
     snap.atr14 = _atr(highs, lows, closes, 14)
 
     last = float(closes[-1])
-    snap.high_52w = float(closes[-min(252, len(closes)):].max())
-    snap.low_52w = float(closes[-min(252, len(closes)):].min())
+    n52 = min(252, len(closes))
+    # Use intraday highs/lows for the 52-week extremes (not closes) — closes
+    # always understate the true high, biasing "% off 52w high" toward 0.
+    snap.high_52w = float(highs[-n52:].max())
+    snap.low_52w = float(lows[-n52:].min())
     if snap.high_52w:
         snap.pct_off_52w_high = (last - snap.high_52w) / snap.high_52w * 100
     if snap.low_52w:

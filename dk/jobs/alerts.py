@@ -318,12 +318,21 @@ def run() -> dict:
     return counts
 
 
+# Silent scorecard-only kinds: written sms_sent=1 and never meant to leave the
+# system (no phone, no Discord). Excluded so discord.push_unsent() doesn't blast
+# the wider silently-tracked set to the webhook.
+_SILENT_KINDS = ("SETUP_TRACK", "EQUITY_IDEA_TRACK")
+
+
 def fetch_unsent() -> list[sqlite3.Row]:
-    """Return alerts not yet pushed externally (seen=0)."""
+    """Return alerts not yet pushed externally (seen=0), minus silent tracking rows."""
     with sqlite3.connect(DB_PATH) as c:
         c.row_factory = sqlite3.Row
+        ph = ",".join("?" * len(_SILENT_KINDS))
         return c.execute(
-            "SELECT id, symbol, kind, message, payload, created_at FROM alerts WHERE seen=0 ORDER BY id ASC"
+            f"SELECT id, symbol, kind, message, payload, created_at FROM alerts "
+            f"WHERE seen=0 AND kind NOT IN ({ph}) ORDER BY id ASC",
+            _SILENT_KINDS,
         ).fetchall()
 
 
