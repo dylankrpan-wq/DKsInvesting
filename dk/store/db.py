@@ -298,6 +298,29 @@ CREATE TABLE IF NOT EXISTS overnight_digests (
     sent_at TEXT DEFAULT CURRENT_TIMESTAMP,
     chunks INTEGER
 );
+
+CREATE TABLE IF NOT EXISTS equity_idea_results (
+    alert_id      INTEGER PRIMARY KEY,   -- the EQUITY_IDEA / EQUITY_IDEA_TRACK alert
+    symbol        TEXT,
+    horizon       TEXT,                  -- short_term / swing / long_term
+    pushed        INTEGER,               -- 1 = phone-pushed, 0 = silently tracked
+    entry         REAL,
+    stop          REAL,
+    tp1 REAL, tp2 REAL, tp3 REAL,
+    rr1           REAL,
+    opened_at     TEXT,
+    status        TEXT,                  -- WIN / LOSS / OPEN / EXPIRED
+    max_tp        INTEGER,               -- 0..3 highest rung reached before stop
+    stopped       INTEGER,
+    mfe_pct       REAL,
+    mae_pct       REAL,
+    last_price    REAL,
+    cur_pct       REAL,
+    realized_r    REAL,
+    resolved      INTEGER,
+    resolved_at   TEXT,
+    updated_at    TEXT
+);
 """
 
 

@@ -1300,6 +1300,49 @@ with tab_opps:
     with st.expander(":newspaper: Daily digest — what changed today", expanded=True):
         st.markdown(digest_mod.build())
 
+    # ---- Multi-horizon equity ideas + scorecard ----
+    st.markdown("##### 💡 Multi-horizon equity ideas")
+    st.caption("Short-term / swing / long-term LONG ideas across a broad cross-sector universe — "
+               "logic-backed, $100-minimum whole-share sizing. Discovery, not instructions. "
+               "Auto-scans on the schedule; scan on demand here.")
+    if st.button("🔍 Scan for equity ideas now", key="equity_ideas_scan"):
+        from dk.analysis import equity_ideas as _eqi
+        with st.spinner("Scanning the market for multi-horizon ideas…"):
+            _ideas = _eqi.scan()
+        st.markdown(_eqi.build_report(_ideas))
+
+    @st.cache_data(ttl=600, show_spinner=False)
+    def _equity_scorecard_data():
+        from dk.analysis import equity_scorecard as _esc
+        rows = _esc.build_ledger(max_refresh=0)  # display-only: no network on dashboard load
+        return rows, _esc.summary(rows)
+
+    st.markdown("##### 📋 Equity idea scorecard — accuracy by horizon")
+    if st.button("↻ Refresh equity scorecard", key="equity_scorecard_go"):
+        st.cache_data.clear()
+        st.rerun()
+    try:
+        from dk.analysis import equity_scorecard as _esc
+        with st.spinner("Replaying equity ideas vs daily candles…"):
+            _erows, _estats = _equity_scorecard_data()
+        if _erows:
+            ec = st.columns(5)
+            ec[0].metric("Ideas", _estats["total"])
+            ec[1].metric("W / L", f"{_estats['wins']} / {_estats['losses']}")
+            ec[2].metric("Open", _estats["open"])
+            ec[3].metric("Win rate",
+                         f"{_estats['win_rate_pct']}%" if _estats["win_rate_pct"] is not None else "—")
+            ec[4].metric("Expectancy",
+                         f"{_estats['expectancy_r']:+}R" if _estats["expectancy_r"] is not None else "—")
+            st.caption(f"{_estats['pushed']} pushed to phone · {_estats['tracked']} silently tracked")
+            st.markdown(_esc.render_markdown(_erows, _estats))
+        else:
+            st.info("No equity ideas tracked yet — they appear here once the scan fires "
+                    "(pushed + the wider silently-tracked set).")
+    except Exception as e:
+        st.warning(f"Equity scorecard unavailable: {e}")
+    st.markdown("---")
+
     st.subheader("Opportunity ranking")
     st.caption(":bulb: Composite signal — magnitude shows attention-worthiness, "
                "direction shows bull/bear lean. Not a buy/sell call.")

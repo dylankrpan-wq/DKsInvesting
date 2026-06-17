@@ -106,6 +106,14 @@ def _equity_ideas_job():
         print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] equity ideas -> {res}")
     except Exception as e:
         print(f"  !! equity ideas failed: {e}")
+    try:  # refresh the equity idea scorecard (freezes resolved outcomes)
+        from dk.analysis import equity_scorecard
+        s = equity_scorecard.summary(equity_scorecard.build_ledger())
+        print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] equity scorecard -> "
+              f"{s['total']} ideas, {s['wins']}W/{s['losses']}L/{s['open']}open, "
+              f"exp {s['expectancy_r']}R")
+    except Exception as e:
+        print(f"  !! equity scorecard failed: {e}")
 
 
 def _equity_scan_hours() -> str:
