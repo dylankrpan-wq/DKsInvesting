@@ -166,26 +166,34 @@ def _build_idea(sym: str, snap, sig: dict, rs: dict, cheap: dict | None) -> dict
     if not bullish:
         return None
 
+    swing_trig = bool({"MACD_BULL_CROSS", "SMA50_RECLAIM", "BB_BREAKOUT_UP",
+                       "NEW_52W_HIGH", "GOLDEN_CROSS"} & codes)
+    short_trig = bool({"VOLUME_SURGE", "RSI_EXIT_OVERSOLD", "RSI_OVERSOLD",
+                       "BB_BREAKOUT_UP"} & codes)
+    chg_min = float(_cfg().get("short_chg_min", 3.0))
+
     reasons: list[str] = []
-    # Horizon by durability: durable trend -> long; fresh trigger -> swing;
-    # near-term momentum -> short. long_term REQUIRES measured RS (fail-closed):
-    # we don't claim "relative-strength leadership" when the benchmark is missing.
-    if above200 and ma50_gt_200 and stacked and rs120 is not None and rs120 >= 0:
+    # Horizon by durability: 200-day uptrend leader -> long; above-50 trend/RS
+    # leader -> swing; meaningful move today in an uptrend -> short. long_term
+    # REQUIRES measured RS (fail-closed). A shallow pullback (below the 20-MA but
+    # still 50>200 above the 200-MA) still counts long-term — that's a dip entry.
+    if above200 and ma50_gt_200 and rs120 is not None and rs120 >= 0:
         horizon = "long_term"
-        reasons.append("durable stacked uptrend above a rising 200-day MA")
+        reasons.append("uptrend above a rising 200-day MA (50>200), fully stacked"
+                       if stacked else "long-term uptrend (50>200), buying a pullback")
         if rs120 > 0:
             reasons.append(f"+{rs120:.0f}% vs SPY over ~6mo (relative-strength leader)")
-    elif above50 and ({"MACD_BULL_CROSS", "SMA50_RECLAIM", "BB_BREAKOUT_UP",
-                       "NEW_52W_HIGH", "GOLDEN_CROSS"} & codes
-                      or (snap.rsi14 and 40 <= snap.rsi14 <= 62 and snap.trend == "up")):
+    elif above50 and (swing_trig
+                      or (snap.rsi14 and 40 <= snap.rsi14 <= 62 and snap.trend == "up")
+                      or (rs60 and rs60 > 0)):
         horizon = "swing"
-        reasons.append("uptrend with a fresh swing trigger")
+        reasons.append("uptrend with a fresh swing trigger" if swing_trig
+                       else "above the 50-day MA, leading on 3-month relative strength")
         if rs60 and rs60 > 0:
             reasons.append(f"+{rs60:.0f}% vs SPY over ~3mo")
-    elif ({"VOLUME_SURGE", "RSI_EXIT_OVERSOLD", "RSI_OVERSOLD", "BB_BREAKOUT_UP"} & codes
-          and chg >= 3):
+    elif chg >= chg_min and (short_trig or above50):
         horizon = "short_term"
-        reasons.append("near-term momentum trigger in play")
+        reasons.append(f"up {chg:.0f}% today with near-term momentum")
         if rs60 and rs60 > 0:
             reasons.append(f"+{rs60:.0f}% vs SPY over ~3mo")
     else:

@@ -62,7 +62,8 @@ def _rsi_series(x, n=14):
     for i in range(n + 1, len(x)):
         ag[i] = (ag[i - 1] * (n - 1) + gain[i]) / n
         al[i] = (al[i - 1] * (n - 1) + loss[i]) / n
-    rs = np.where(al == 0, np.inf, ag / al)
+    with np.errstate(divide="ignore", invalid="ignore"):  # al==0 handled by np.where
+        rs = np.where(al == 0, np.inf, ag / al)
     return 100.0 - 100.0 / (1.0 + rs)
 
 
