@@ -211,20 +211,23 @@ def _build_idea(sym: str, snap, sig: dict, rs: dict, cheap: dict | None) -> dict
     # entry / stop / targets sized to the horizon. The top rung blends in the
     # 52-week high ONLY when the name is actually near it (else a deep-drawdown
     # name would get a +50% target inconsistent with a "weeks" holding period).
+    # Volatility-scaled (ATR) stops per horizon — NOT a stop way down at the 50-MA,
+    # which gave 20-40% risk on names that had run far above it (penalizing the
+    # strongest trends). The max_risk_pct cap then drops anything still too wide.
     hi = snap.high_52w or 0.0
     near_high = snap.pct_off_52w_high is not None and snap.pct_off_52w_high >= -10
     if horizon == "long_term":
-        stop = min(snap.sma50 or (price - 2 * atr), price - 2 * atr)
+        stop = price - 2.5 * atr
         top = max(price * 1.45, hi * 1.10) if near_high else price * 1.45
         tgts = [price * 1.15, price * 1.30, top]
         hold = "months+"
     elif horizon == "swing":
-        stop = min(snap.sma20 or (price - 1.5 * atr), price - 1.5 * atr)
+        stop = price - 1.8 * atr
         top = max(price * 1.22, hi) if near_high else price * 1.22
         tgts = [price * 1.07, price * 1.14, top]
         hold = "weeks"
     else:  # short_term
-        stop = price - 1.0 * atr
+        stop = price - 1.2 * atr
         tgts = [price * 1.04, price * 1.08, price * 1.12]
         hold = "days"
 
@@ -304,8 +307,10 @@ def scan(max_deep: int = 30) -> list[dict]:
             history_short += 1  # no idea AND too few bars => likely a blocked fetch
         if idea:
             ideas.append(idea)
-    min_rr = float(_cfg().get("min_rr", 1.0))   # quality bar: drop sub-min R:R ideas
-    ideas = [i for i in ideas if i["rr1"] >= min_rr]
+    cfg = _cfg()                                 # quality bars: R:R floor + stop cap
+    min_rr = float(cfg.get("min_rr", 1.0))
+    max_risk = float(cfg.get("max_risk_pct", 12.0))
+    ideas = [i for i in ideas if i["rr1"] >= min_rr and i["risk_pct"] <= max_risk]
     ideas.sort(key=lambda i: (i["conviction"], i["rr1"]), reverse=True)
     _LAST_SCAN_STATS = {"universe": len(uni), "analyzed": len(shortlist),
                         "history_short": history_short, "bench_ok": bench_ok,
@@ -433,6 +438,8 @@ def scan_and_alert(push: bool = True) -> dict:
     push_n = int(cfg.get("push_top_n", 3))
     track_n = int(cfg.get("track_top_n", 12))
     cd = int(cfg.get("cooldown_hours", 24))
+    push_min = int(cfg.get("push_min_conviction", 4))  # only A+ ideas reach the phone
+    push_pool = [i for i in ideas if i["conviction"] >= push_min]
 
     def _fresh(c, sym) -> bool:
         return not c.execute(
@@ -445,7 +452,7 @@ def scan_and_alert(push: bool = True) -> dict:
     pushed_ids: set[str] = set()
     store.init_db()
     with store.conn() as c:
-        for idea in ideas:  # choose the PUSH set — reserve the ids; the EQUITY_IDEA
+        for idea in push_pool:  # PUSH set: A+ only — reserve ids; the EQUITY_IDEA
             if len(pushed_ideas) >= push_n:  # row is written AFTER a successful send
                 break
             if not _fresh(c, idea["symbol"]):

@@ -177,8 +177,10 @@ equity_ideas:
   enabled: true
   scan_hours_utc: "14,18"    # UTC cron hours; ≈10:15/14:15 ET in summer (EDT), 09:15/13:15 ET in winter (EST)
   max_deep: 50               # deep-analyze this many shortlisted names per scan (broader net)
-  min_conviction: 2          # only push/track ideas with >= this many supporting reasons
-  min_rr: 1.0                # ...and a nearest-target R:R >= this (drops sub-1:1 short-term ideas)
+  min_conviction: 2          # track ideas with >= this many supporting reasons
+  push_min_conviction: 4     # ...but only PUSH A+ ideas (>= this many) to the phone
+  min_rr: 1.0                # nearest-target R:R floor (drops sub-1:1 short-term ideas)
+  max_risk_pct: 12.0         # drop ideas whose stop is wider than this % (no 15% mid-cap stops)
   short_chg_min: 3.0         # a short-term idea needs at least this % move today
   push_top_n: 3              # best ideas pushed to the phone (each with a thesis)
   track_top_n: 12            # also silently track this many more (scorecard sample)
