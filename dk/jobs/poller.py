@@ -257,6 +257,15 @@ def _run_once_impl() -> dict:
         print(f"[morning_brief] {e}")
         summary["morning_brief"] = {"error": str(e)}
 
+    # Daily performance recap — once/day after the close, pushes how the
+    # hypothetical perp + equity call-outs are doing (both scorecards). Idempotent.
+    try:
+        from dk.briefing import perf_recap
+        summary["perf_recap"] = perf_recap.maybe_send()
+    except Exception as e:
+        print(f"[perf_recap] {e}")
+        summary["perf_recap"] = {"error": str(e)}
+
     print(f"[poller] done: {summary}")
     return summary
 

@@ -218,6 +218,15 @@ morning_brief:
   model: claude-opus-4-8
   send_to_phone: true
 
+# 📊 Daily performance recap — once a day after the close, pushes how the
+# hypothetical perp + equity call-outs are doing (both scorecards: W/L, win-rate,
+# expectancy, total R, what resolved today, by-horizon). Poller-driven + idempotent.
+perf_recap:
+  enabled: true
+  hour_et: 17                # fires at/after 17:00 ET (after the US close)
+  minute: 0
+  equity_refresh: 20         # daily-bar refresh cap when building the equity scorecard
+
 # 📊 Hourly pulse — a consolidated activity summary texted at the top of each
 # hour, 24/7, but ONLY when the prior hour had notable activity (conviction
 # setups, movers, breaking news, crypto moves, rank changes). Quiet hours stay

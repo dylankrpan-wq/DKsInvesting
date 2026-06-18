@@ -299,6 +299,11 @@ CREATE TABLE IF NOT EXISTS overnight_digests (
     chunks INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS perf_recaps (
+    recap_date TEXT PRIMARY KEY,         -- one daily performance recap per ET day
+    sent_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS equity_idea_results (
     alert_id      INTEGER PRIMARY KEY,   -- the EQUITY_IDEA / EQUITY_IDEA_TRACK alert
     symbol        TEXT,
