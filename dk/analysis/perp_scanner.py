@@ -16,6 +16,7 @@ only (dashboard button / CLI) — not on the fast timer.
 """
 from __future__ import annotations
 import json
+import math
 import time
 from dk.config import load_watchlist
 from dk.sources import crypto_deriv
@@ -30,61 +31,133 @@ def cron_minute() -> int:
     return int(_cfg().get("cron_minute", 30))
 
 
-def scan(top_n: int = 10, max_deep: int = 25, min_vol_usd: float = 300_000,
-         min_rr: float = 2.5, max_risk_pct: float = 4.0,
-         side: str = "both") -> list[dict]:
-    """Return ranked setups (best R:R first). side: 'both' | 'long' | 'short'."""
+def _trend_setup(a: dict, side: str, stop_mult: float = 1.2) -> dict | None:
+    """TREND-FOLLOWING setup: a tight ATR stop in the trend direction + R-multiple
+    extension targets. perp.analyze's built-in setups are RANGE/mean-reversion
+    (buy support, target resistance) — in a trend that gives fake-high R:R on the
+    counter-trend side (the fades that bleed) and sub-1 R:R with-trend. This builds
+    the with-trend setup correctly: you risk a shallow ATR pullback to ride the
+    continuation, targets at 1.5R / 3R / 4.5R."""
+    last, atr = a.get("last"), a.get("atr_1h")
+    if not last or not atr or atr <= 0:
+        return None
+    risk = stop_mult * atr
+    if risk <= 0:
+        return None
+    if side == "long":
+        stop = last - risk
+        tps = [last + m * risk for m in (1.5, 3.0, 4.5)]
+    else:
+        stop = last + risk
+        tps = [last - m * risk for m in (1.5, 3.0, 4.5)]
+    tps = [t for t in tps if t > 0]
+    if stop <= 0 or not tps:
+        return None
+    return {
+        "entry": round(last, 6), "stop": round(stop, 6),
+        "risk_pct": round(risk / last * 100, 1), "rr1": 1.5,
+        "tps": [{"level": round(t, 6), "r": round(abs(t - last) / risk, 1),
+                 "pct": round((t - last) / last * 100, 1), "basis": "R-mult"} for t in tps],
+    }
+
+
+def scan(top_n: int = 10, max_deep: int = 40, min_vol_usd: float = 1_000_000,
+         max_vol_range: float = 60.0, min_rr: float = 1.5, max_risk_pct: float = 6.0,
+         min_confluence: int = 3, stop_mult: float = 1.2, side: str = "both") -> list[dict]:
+    """Return TREND-ALIGNED, confluence-gated setups, ranked by conviction.
+
+    Quality over quantity (the scorecard showed R:R-only / max-volatility selection
+    bleeds): (1) liquid universe with a tradeable BUT NOT insane range — extreme
+    volatility = manipulated low-floats, skipped; (2) only the side that agrees
+    with the 1H trend (no fading); (3) a confluence score (trend + funding tailwind
+    + R:R + tight risk + volume + room to target) — only setups clearing
+    min_confluence qualify. side: 'both' | 'long' | 'short'."""
     tickers = crypto_deriv.fetch_tickers("SWAP")
     if not tickers:
         return []
 
-    # Stage 1: liquid + most volatile (a real working range = tradeable structure)
+    # Stage 1: LIQUID names with a real-but-sane range. Rank by a quality blend
+    # (range capped + weighted by liquidity), NOT raw max volatility.
     cands = []
     for t in tickers:
         if t["quote_vol_usd"] < min_vol_usd or not t["low24h"]:
             continue
-        vol_range = (t["high24h"] - t["low24h"]) / t["low24h"] * 100.0
-        cands.append((vol_range, t))
+        vr = (t["high24h"] - t["low24h"]) / t["low24h"] * 100.0
+        if vr > max_vol_range:   # too volatile -> too manipulated -> skip
+            continue
+        quality = min(vr, 25.0) * (1 + math.log10(t["quote_vol_usd"] / min_vol_usd + 1.0))
+        cands.append((quality, t))
     cands.sort(key=lambda x: x[0], reverse=True)
     shortlist = [t for _, t in cands[:max_deep]]
 
-    # Stage 2: deep structure, keep the better side if it clears the bars
+    # Stage 2: deep structure -> trend-align -> confluence-gate
     out: list[dict] = []
     for t in shortlist:
         a = perp.analyze(t["inst_id"], ticker=t)
         if not a:
             continue
-        options = []
-        for sd in ("long", "short"):
-            if side != "both" and side != sd:
-                continue
-            s = a.get(sd)
-            if s and s.get("rr1") is not None and s.get("risk_pct") is not None:
-                if s["rr1"] >= min_rr and s["risk_pct"] <= max_risk_pct:
-                    options.append((sd, s))
-        if not options:
+        # --- trend (1H): only trade WITH it; skip choppy/mixed ---
+        vs_ma, chg = a.get("vs_ma_pct"), a.get("chg_24h_pct")
+        if vs_ma is None or chg is None:
             continue
-        sd, s = max(options, key=lambda o: o[1]["rr1"])
-        # funding tailwind: long wants negative funding, short wants positive
+        if vs_ma > 0 and chg > 0:
+            trend = "long"
+        elif vs_ma < 0 and chg < 0:
+            trend = "short"
+        else:
+            continue  # no clean trend -> no call-out (this kills the fade trades)
+        if side != "both" and side != trend:
+            continue
+        # TREND-FOLLOWING setup (tight ATR stop + R-multiple extension), NOT the
+        # range setup — that's the whole fix for the counter-trend-fade bleed.
+        s = _trend_setup(a, trend, stop_mult=stop_mult)
+        if not s or s["risk_pct"] > max_risk_pct:
+            continue
+
+        # --- confluence (of 6): trend is factor 1; stack the rest ---
         fund = a.get("funding_pct")
-        tailwind = (fund is not None and ((sd == "long" and fund < 0)
-                                          or (sd == "short" and fund > 0)))
+        tailwind = (fund is not None and ((trend == "long" and fund < 0)
+                                          or (trend == "short" and fund > 0)))
+        conf = 1
+        reasons = [f"{trend} with the 1H trend ({vs_ma:+}% vs MA20, {chg:+}% 24h)"]
+        if tailwind:
+            conf += 1
+            reasons.append("funding pays your side")
+        if abs(vs_ma) >= 3:
+            conf += 1
+            reasons.append("strong trend (>3% from MA20)")
+        if s["risk_pct"] <= 2.5:
+            conf += 1
+            reasons.append(f"contained {s['risk_pct']}% risk")
+        if (a.get("last_vol_x") or 0) >= 1.5:
+            conf += 1
+            reasons.append(f"volume {a['last_vol_x']}x")
+        off_hi, abv_lo = a.get("off_high_pct"), a.get("above_low_pct")
+        if trend == "long" and off_hi is not None and off_hi <= -3:
+            conf += 1
+            reasons.append("room below the 24h high")
+        elif trend == "short" and abv_lo is not None and abv_lo >= 3:
+            conf += 1
+            reasons.append("room above the 24h low")
+        if conf < min_confluence:
+            continue
+
         out.append({
-            "inst_id": a["inst_id"], "side": sd, "rr1": s["rr1"],
+            "inst_id": a["inst_id"], "side": trend, "rr1": s["rr1"],
             "risk_pct": s["risk_pct"], "entry": s["entry"], "stop": s["stop"],
-            "tps": s.get("tps", []),
+            "tps": s.get("tps", []), "confluence": conf, "conf_reasons": reasons,
             "phase": a.get("phase"), "micro_pos": a.get("micro_pos"),
-            "chg_24h_pct": a.get("chg_24h_pct"), "off_high_pct": a.get("off_high_pct"),
+            "chg_24h_pct": chg, "off_high_pct": off_hi,
             "funding_pct": fund, "funding_tailwind": tailwind,
-            "invalidation": a.get(f"invalidation_{sd}"),
-            # extra features captured for the scorecard's win/loss bucket analysis
-            "atr_pct": a.get("atr_pct"), "vs_ma_pct": a.get("vs_ma_pct"),
-            "above_low_pct": a.get("above_low_pct"), "range24_pct": a.get("range24_pct"),
+            "invalidation": a.get(f"invalidation_{trend}"),
+            "atr_pct": a.get("atr_pct"), "vs_ma_pct": vs_ma,
+            "above_low_pct": abv_lo, "range24_pct": a.get("range24_pct"),
             "last_vol_x": a.get("last_vol_x"),
         })
         time.sleep(0.08)  # be polite to the public endpoint
 
-    out.sort(key=lambda r: r["rr1"], reverse=True)
+    # rank by conviction (confluence) first, then R:R
+    out.sort(key=lambda r: (r["confluence"], r["rr1"]), reverse=True)
     return out[:top_n]
 
 
@@ -122,14 +195,18 @@ def _fmt_p(p):
 
 
 def _setup_msg(r: dict) -> str:
-    """One-line setup text — used both as the alert body and the chart caption."""
+    """Setup text — used both as the alert body and the chart caption."""
     arrow = "🟢" if r["side"] == "long" else "🔴"
     tw = " ⚡fund" if r.get("funding_tailwind") else ""
     tps = r.get("tps") or []
     tp_str = " / ".join(f"${_fmt_p(tp['level'])}" for tp in tps) or "—"
+    conf = r.get("confluence")
+    badge = f" · ⭐{conf}/6 confluence" if conf else ""
+    why = "; ".join((r.get("conf_reasons") or [])[:3])
     return (f"🎯 {arrow} {r['side'].upper()} {r['inst_id']} {r['rr1']}:1 "
-            f"(risk {r['risk_pct']}%) — entry ${_fmt_p(r['entry'])}, "
-            f"stop ${_fmt_p(r['stop'])}, TP1/2/3 {tp_str}{tw}")
+            f"(risk {r['risk_pct']}%){badge} — entry ${_fmt_p(r['entry'])}, "
+            f"stop ${_fmt_p(r['stop'])}, TP1/2/3 {tp_str}{tw}"
+            + (f"\nwhy: {why}" if why else ""))
 
 
 def scan_and_alert(push: bool = True) -> dict:
@@ -147,24 +224,27 @@ def scan_and_alert(push: bool = True) -> dict:
     from dk.notify import sms
     phone = sms.is_configured()
 
-    # Wide net at the track bar (lower R:R / higher risk%) — the research universe.
-    track_rows = scan(top_n=int(cfg.get("track_universe", 20)),
+    # Trend-aligned, confluence-gated, trend-following research set (quality first).
+    track_rows = scan(top_n=int(cfg.get("track_universe", 12)),
                       max_deep=int(cfg.get("track_deep", 40)),
-                      min_rr=float(cfg.get("track_min_rr", 2.5)),
-                      max_risk_pct=float(cfg.get("track_max_risk_pct", 5.0)),
+                      min_vol_usd=float(cfg.get("min_vol_usd", 1_000_000)),
+                      max_vol_range=float(cfg.get("max_vol_range", 60.0)),
+                      max_risk_pct=float(cfg.get("track_max_risk_pct", 6.0)),
+                      min_confluence=int(cfg.get("min_confluence", 3)),
+                      stop_mult=float(cfg.get("stop_mult", 1.2)),
                       side=cfg.get("side", "both"))
     if not track_rows:
-        return {"scanned": True, "pushed": 0, "tracked": 0, "note": "no setups clear the track bar"}
+        return {"scanned": True, "pushed": 0, "tracked": 0,
+                "note": "no trend-aligned, confluent setups right now"}
 
-    push_min_rr = float(cfg.get("min_rr", 4.0))
-    push_max_risk = float(cfg.get("max_risk_pct", 3.0))
+    push_min_conf = int(cfg.get("push_min_confluence", 4))
     push_n = int(cfg.get("top_n", 2))
-    track_n = int(cfg.get("track_top_n", 6))
+    track_n = int(cfg.get("track_top_n", 4))
     push_cd = int(cfg.get("cooldown_hours", 6))
     track_cd = int(cfg.get("track_cooldown_hours", 3))
 
-    push_pool = [r for r in track_rows
-                 if r["rr1"] >= push_min_rr and r["risk_pct"] <= push_max_risk]
+    # PUSH only the A+ setups (high confluence); everything else is tracked silently.
+    push_pool = [r for r in track_rows if r["confluence"] >= push_min_conf]
 
     new = 0          # SETUP_SCAN (pushed) count
     tracked = 0      # SETUP_TRACK (silent) count
@@ -182,10 +262,10 @@ def scan_and_alert(push: bool = True) -> dict:
                 (r["inst_id"], f"-{push_cd} hours")).fetchone()
             if recent:
                 continue
-            c.execute(
+            cur = c.execute(
                 "INSERT INTO alerts (symbol, kind, message, payload) VALUES (?,?,?,?)",
                 (r["inst_id"], "SETUP_SCAN", _setup_msg(r), json.dumps(r)))
-            registered.append((c.lastrowid, r))
+            registered.append((cur.lastrowid, r))
             pushed_ids.add(r["inst_id"])
             new += 1
         # TRACK: up to track_n more (not already pushed), fresh per the track
