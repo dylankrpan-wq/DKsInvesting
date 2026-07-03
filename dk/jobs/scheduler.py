@@ -128,6 +128,26 @@ def _sector_digest_job():
         print(f"  !! sector digest failed: {e}")
 
 
+def _market_highlights_job():
+    """Broad market highlights -> phone/group (movers, popular stocks/ETFs,
+    ETF moves, macro + real-world news). Market-hours gated inside."""
+    try:
+        from dk.jobs import market_highlights
+        res = market_highlights.run_once()
+        if res.get("sent"):
+            print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] market highlights -> {res}")
+    except Exception as e:
+        print(f"  !! market highlights failed: {e}")
+
+
+def _highlights_interval() -> int:
+    try:
+        from dk.config import load_watchlist
+        return max(15, int((load_watchlist().get("market_highlights") or {}).get("interval_minutes", 30)))
+    except Exception:
+        return 30
+
+
 def _sector_digest_interval() -> int:
     try:
         from dk.config import CONFIG_DIR
@@ -224,6 +244,11 @@ def start_background_scheduler(run_now: bool = True):
     sched.add_job(_sector_digest_job, IntervalTrigger(minutes=sd_min),
                   id="sector_digest", max_instances=1, coalesce=True,
                   misfire_grace_time=300)
+    # Broad market highlights -> phone (offset ~half-interval from sector digest).
+    hl_min = _highlights_interval()
+    sched.add_job(_market_highlights_job, IntervalTrigger(minutes=hl_min),
+                  id="market_highlights", max_instances=1, coalesce=True,
+                  misfire_grace_time=300)
     sched.start()
     _BG_SCHED = sched
     # Catch-up: if we booted (deploy/restart) during RTH on a trading day and no
@@ -314,10 +339,15 @@ def main():
     sched.add_job(_sector_digest_job, IntervalTrigger(minutes=sd_min),
                   id="sector_digest", max_instances=1, coalesce=True,
                   misfire_grace_time=300)
+    hl_min = _highlights_interval()
+    sched.add_job(_market_highlights_job, IntervalTrigger(minutes=hl_min),
+                  id="market_highlights", max_instances=1, coalesce=True,
+                  misfire_grace_time=300)
     sched.start()
     print(f"DK scheduler running every {POLL_MINUTES} min + hourly pulse "
           f"+ {spike_s}s crypto spike + hourly setup scan + {pm_min}m pre-market "
-          f"scan + equity ideas @{eq_hours}h UTC + {sd_min}m sector digest. Ctrl+C to stop.")
+          f"scan + equity ideas @{eq_hours}h UTC + {sd_min}m sector digest "
+          f"+ {hl_min}m market highlights. Ctrl+C to stop.")
 
     stop = False
     def handle(sig, frame):

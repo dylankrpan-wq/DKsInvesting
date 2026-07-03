@@ -259,6 +259,15 @@ brief:
   model: claude-opus-4-8     # cheaper options work too (e.g. claude-haiku-4-5 ≈ $0.02/day)
   send_to_phone: true        # also push the brief through the Telegram/SMS channel below
 
+# Broad market highlights push (movers, popular stocks/ETFs, macro + real-world news).
+market_highlights:
+  interval_minutes: 30
+  market_hours_only: true
+  max_movers: 6      # top gainers / losers each
+  max_active: 6      # most-active (popular) stocks
+  max_etfs: 6        # biggest ETF movers
+  max_news: 5        # real-world highlight headlines
+
 # SMS phone alerts — which alert kinds count as "live events" worth a text,
 # and how many to include per digest text. Credentials live in secrets.env.
 sms:
