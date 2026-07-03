@@ -1,0 +1,44 @@
+# Named portfolios / watchlists. Each gets its own scheduled report (moves,
+# backtested setups, news) pushed to the phone/group on its own interval.
+# Add a new one by copying the block below with a fresh id.
+
+portfolios:
+  marks:
+    name: "Mark's Watchlist"
+    interval_minutes: 20
+    market_hours_only: true
+    move_threshold_pct: 3.0
+    max_setups: 8
+    max_news: 6
+    tickers:
+      # equities
+      - T
+      - IIPR
+      - RKLB
+      - ASTS
+      - BKSY
+      - ARCC
+      - RDW
+      - MPLX
+      - PL
+      - VSAT
+      - AGNC
+      - ECHO
+      - CRCL
+      - QBTS
+      - KEEL
+      - CNP
+      - NEE
+      - SLB
+      - VZ
+      - CORZ
+      - DUK
+      - RIOT
+      - VST
+      - PLTR
+      # ETFs & closed-end
+      - VTWO
+      - JEPQ
+      - NASA
+      - ARKQ
+      - QQQ

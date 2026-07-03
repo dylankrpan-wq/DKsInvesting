@@ -82,6 +82,13 @@ def _run_once_impl() -> dict:
                         _news_syms.append(_u)
     except Exception as _e:
         print(f"[poller] sector news list: {_e}")
+    try:  # named-portfolio tickers (Mark's Watchlist, etc.)
+        from dk.jobs.portfolio_digest import all_portfolio_tickers
+        for _u in all_portfolio_tickers():
+            if _u not in _news_syms:
+                _news_syms.append(_u)
+    except Exception as _e:
+        print(f"[poller] portfolio news list: {_e}")
     summary["news_per_ticker"] = news_rss.fetch_per_ticker(_news_syms)
 
     # NewsAPI per ticker (if key set)

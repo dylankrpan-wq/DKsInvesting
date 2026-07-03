@@ -140,6 +140,18 @@ def _market_highlights_job():
         print(f"  !! market highlights failed: {e}")
 
 
+def _portfolio_dispatch_job():
+    """Fire each named portfolio's report when its interval has elapsed."""
+    try:
+        from dk.jobs import portfolio_digest
+        res = portfolio_digest.run_due()
+        sent = {k: v for k, v in res.items() if isinstance(v, dict) and v.get("sent")}
+        if sent:
+            print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] portfolio reports -> {sent}")
+    except Exception as e:
+        print(f"  !! portfolio dispatch failed: {e}")
+
+
 def _highlights_interval() -> int:
     try:
         from dk.config import load_watchlist
@@ -249,6 +261,10 @@ def start_background_scheduler(run_now: bool = True):
     sched.add_job(_market_highlights_job, IntervalTrigger(minutes=hl_min),
                   id="market_highlights", max_instances=1, coalesce=True,
                   misfire_grace_time=300)
+    # Named-portfolio report dispatcher — checks every 5 min, fires those due.
+    sched.add_job(_portfolio_dispatch_job, IntervalTrigger(minutes=5),
+                  id="portfolio_dispatch", max_instances=1, coalesce=True,
+                  misfire_grace_time=180)
     sched.start()
     _BG_SCHED = sched
     # Catch-up: if we booted (deploy/restart) during RTH on a trading day and no
@@ -343,6 +359,9 @@ def main():
     sched.add_job(_market_highlights_job, IntervalTrigger(minutes=hl_min),
                   id="market_highlights", max_instances=1, coalesce=True,
                   misfire_grace_time=300)
+    sched.add_job(_portfolio_dispatch_job, IntervalTrigger(minutes=5),
+                  id="portfolio_dispatch", max_instances=1, coalesce=True,
+                  misfire_grace_time=180)
     sched.start()
     print(f"DK scheduler running every {POLL_MINUTES} min + hourly pulse "
           f"+ {spike_s}s crypto spike + hourly setup scan + {pm_min}m pre-market "
