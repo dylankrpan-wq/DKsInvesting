@@ -9,14 +9,48 @@ Config lives in config/watchlist.yaml under `pushes:`. Missing config = all on
 (fully backward compatible).
 """
 from __future__ import annotations
-from dk.config import load_watchlist
+import json
+from dk.config import load_watchlist, DATA_DIR
+
+# Runtime overrides written by the dashboard's Push Control panel. Live on the
+# persistent volume so they survive restarts and take precedence over the YAML.
+_STATE = DATA_DIR / "push_state.json"
+
+
+def _overrides() -> dict:
+    try:
+        return json.loads(_STATE.read_text()) if _STATE.exists() else {}
+    except Exception:
+        return {}
+
+
+def set_override(patch: dict) -> None:
+    """Merge `patch` into the runtime push state (dashboard toggles call this)."""
+    cur = _overrides()
+    for k, v in patch.items():
+        if k == "channels" and isinstance(v, dict):
+            cur["channels"] = {**(cur.get("channels") or {}), **v}
+        else:
+            cur[k] = v
+    try:
+        _STATE.parent.mkdir(parents=True, exist_ok=True)
+        _STATE.write_text(json.dumps(cur, indent=2))
+    except Exception as e:
+        print(f"[gate] set_override failed: {e}")
 
 
 def _cfg() -> dict:
     try:
-        return load_watchlist().get("pushes") or {}
+        base = dict(load_watchlist().get("pushes") or {})
     except Exception:
-        return {}
+        base = {}
+    ov = _overrides()
+    for k, v in ov.items():
+        if k == "channels" and isinstance(v, dict):
+            base["channels"] = {**(base.get("channels") or {}), **v}
+        else:
+            base[k] = v
+    return base
 
 
 def pushes_enabled() -> bool:

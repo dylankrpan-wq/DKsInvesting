@@ -853,6 +853,39 @@ Tune which alert kinds count as "live events" in `config/watchlist.yaml` → `sm
             else:
                 st.error("Send failed — double-check your credentials in secrets/Variables.")
 
+        # ---- Push control (master switch, quiet hours, per-channel) ----
+        st.markdown("---")
+        st.markdown("#### 🎛️ Push control")
+        from dk.notify import gate as _gate
+        _gs = _gate.status()
+        pc1, pc2, pc3 = st.columns([1.2, 1, 1])
+        _master = pc1.toggle("All pushes ON", value=bool(_gs.get("enabled", True)), key="pc_master")
+        if _master != bool(_gs.get("enabled", True)):
+            _gate.set_override({"enabled": _master})
+            st.rerun()
+        _qh = _gs.get("quiet_hours_et") or {"start": 21, "end": 7}
+        _qs = pc2.number_input("Quiet start (ET)", 0, 23, int(_qh.get("start", 21)), key="pc_qs")
+        _qe = pc3.number_input("Quiet end (ET)", 0, 23, int(_qh.get("end", 7)), key="pc_qe")
+        if _qs != int(_qh.get("start", 21)) or _qe != int(_qh.get("end", 7)):
+            _gate.set_override({"quiet_hours_et": {"start": int(_qs), "end": int(_qe)}})
+            st.rerun()
+
+        st.caption(f"Status: {'🟢 pushing' if _gate.should_push() else '🔴 muted'}"
+                   + (" (in quiet hours)" if _gs.get("in_quiet_hours") else ""))
+        st.markdown("**Per-channel:**")
+        _chcfg = _gs.get("channels") or {}
+        ch_cols = st.columns(4)
+        _labels = {"alerts": "Live alerts", "sector": "Sector digest",
+                   "highlights": "Highlights", "portfolios": "Portfolios"}
+        for i, (ck, clabel) in enumerate(_labels.items()):
+            cur = _chcfg.get(ck, True) is not False
+            new = ch_cols[i].toggle(clabel, value=cur, key=f"pc_ch_{ck}")
+            if new != cur:
+                _gate.set_override({"channels": {ck: new}})
+                st.rerun()
+        st.caption("Changes save instantly and take effect on the next scheduled push "
+                   "(overrides `config/watchlist.yaml`, persists on the Railway volume).")
+
     # ===== HEATMAP =====
     if tools_choice == "Heatmap":
         st.markdown("#### Watchlist heatmap")
