@@ -281,6 +281,12 @@ def push_digest() -> dict:
     """Compose + send ONE digest SMS of unsent live-event alerts. Marks them sms_sent=1."""
     if not is_configured():
         return {"configured": False, "sent": 0}
+    try:
+        from dk.notify import gate
+        if not gate.should_push("alerts"):
+            return {"configured": True, "sent": 0, "note": "gated"}
+    except Exception:
+        pass
 
     cfg = _cfg()
     kinds = cfg.get("live_kinds") or DEFAULT_LIVE_KINDS

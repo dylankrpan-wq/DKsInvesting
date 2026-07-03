@@ -259,6 +259,18 @@ brief:
   model: claude-opus-4-8     # cheaper options work too (e.g. claude-haiku-4-5 ≈ $0.02/day)
   send_to_phone: true        # also push the brief through the Telegram/SMS channel below
 
+# Master control for ALL phone/group pushes.
+pushes:
+  enabled: true                # master kill-switch for every push
+  quiet_hours_et:              # no pushes during this ET window (overnight)
+    start: 21                  # 9pm ET
+    end: 7                     # 7am ET
+  channels:                    # turn any single push type off without code
+    alerts: true               # 15-min live-event digest
+    sector: true               # tech/AI/energy sector digest
+    highlights: true           # broad market highlights
+    portfolios: true           # named-portfolio reports (Mark's, etc.)
+
 # Broad market highlights push (movers, popular stocks/ETFs, macro + real-world news).
 market_highlights:
   interval_minutes: 30

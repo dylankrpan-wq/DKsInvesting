@@ -32,6 +32,10 @@ def _mark(c, key: str) -> None:
 
 
 def run_once(force: bool = False) -> dict:
+    if not force:
+        from dk.notify import gate
+        if not gate.should_push("highlights"):
+            return {"skipped": "gated"}
     cfg = _cfg()
     if cfg.get("market_hours_only", True) and not force:
         try:

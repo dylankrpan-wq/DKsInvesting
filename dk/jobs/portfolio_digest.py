@@ -62,6 +62,10 @@ def _already_sent(c, key: str) -> bool:
 
 
 def run_portfolio(pid: str, pcfg: dict, force: bool = False) -> dict:
+    if not force:
+        from dk.notify import gate
+        if not gate.should_push("portfolios"):
+            return {"skipped": "gated"}
     if pcfg.get("market_hours_only", True) and not force:
         try:
             from dk.util import session

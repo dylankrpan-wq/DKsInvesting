@@ -65,6 +65,10 @@ def _mark_sent(c, key: str) -> None:
 
 
 def run_once(force: bool = False) -> dict:
+    if not force:
+        from dk.notify import gate
+        if not gate.should_push("sector"):
+            return {"skipped": "gated"}
     cfg = _cfg()
     dcfg = (cfg.get("sector_digest") or {})
     if dcfg.get("market_hours_only", True) and not force:
