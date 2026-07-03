@@ -28,6 +28,23 @@ def stocktwits(symbol: str) -> str:
     return f"https://stocktwits.com/symbol/{symbol}"
 
 
+def benzinga(symbol: str) -> str:
+    return f"https://www.benzinga.com/quote/{symbol}"
+
+
+def seekingalpha(symbol: str) -> str:
+    return f"https://seekingalpha.com/symbol/{symbol}"
+
+
+def app_thesis(symbol: str) -> str:
+    """Deep-link back into the dashboard, opening this symbol's full Thesis.
+    Needs DK_APP_URL set to the app's public base (e.g. the Railway domain);
+    returns '' when unset so callers can omit it."""
+    import os
+    base = (os.getenv("DK_APP_URL") or "").rstrip("/")
+    return f"{base}/?symbol={symbol}" if base else ""
+
+
 def google_news(symbol: str, name: str | None = None) -> str:
     q = f"{name} {symbol} stock" if name else f"{symbol} stock"
     return f"https://news.google.com/search?q={quote_plus(q)}"
@@ -43,6 +60,8 @@ def research_set(symbol: str, name: str | None = None) -> dict[str, str]:
         "Chart (TradingView)": tradingview(symbol),
         "Yahoo Finance": yahoo(symbol),
         "Finviz": finviz(symbol),
+        "Seeking Alpha": seekingalpha(symbol),
+        "Benzinga": benzinga(symbol),
         "SEC filings": sec_edgar(symbol),
         "News": google_news(symbol, name),
         "StockTwits": stocktwits(symbol),

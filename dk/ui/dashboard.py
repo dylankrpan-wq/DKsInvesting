@@ -277,6 +277,18 @@ if mark_seen_clicked:
 # Click the « arrow at top-left of the page to expand. Click again to collapse to a thin tab.
 ui_glossary.render_sidebar_glossary()
 
+# Deep-link handler: ?symbol=NVDA (from a Telegram push) preselects + auto-builds
+# that ticker's Thesis. Ensures the symbol is a valid option and flags an auto-build.
+try:
+    _qp_symbol = (st.query_params.get("symbol") or "").upper().strip()
+except Exception:
+    _qp_symbol = ""
+if _qp_symbol:
+    st.session_state.setdefault("thesis_sym", _qp_symbol)
+    if not st.session_state.get("_dk_deep_done"):
+        st.session_state["_dk_deep_symbol"] = _qp_symbol
+    st.info(f"🔗 Opened **{_qp_symbol}** from a link — see the **Thesis** tab for the full breakdown.")
+
 (tab_now, tab_markets, tab_opps, tab_thesis, tab_themes, tab_charts, tab_discover,
  tab_tools, tab_alerts, tab_watch, tab_portfolio, tab_sentiment, tab_news,
  tab_earnings, tab_calendar, tab_crypto) = st.tabs(
@@ -1172,9 +1184,13 @@ with tab_thesis:
     st.subheader("Deep-dive thesis")
     st.caption("Pick any ticker (watchlist or discovered candidate) to see the full breakdown.")
     candidate_syms = [c["symbol"] for c in discovery.list_candidates()]
-    universe = sorted(set(equity_syms + candidate_syms))
+    _deep = st.session_state.get("thesis_sym")
+    universe = sorted(set(equity_syms + candidate_syms + ([_deep] if _deep else [])))
     th_sym = st.selectbox("Ticker", universe, key="thesis_sym")
-    if st.button("Build thesis", type="primary"):
+    _auto_build = (st.session_state.pop("_dk_deep_symbol", None) == th_sym)
+    if _auto_build:
+        st.session_state["_dk_deep_done"] = True
+    if st.button("Build thesis", type="primary") or _auto_build:
         with st.spinner(f":mag: Building thesis for {th_sym} — pulling business meta, indicators, sentiment, catalysts..."):
             t = thesis_gen.build(th_sym)
         if th_sym.upper() in OWNED:

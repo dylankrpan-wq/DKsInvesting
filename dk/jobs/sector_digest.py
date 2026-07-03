@@ -180,7 +180,11 @@ def run_once(force: bool = False) -> dict:
                 bt_str = (f" — {s['label']} hit {bt['win_rate']}% "
                           f"(n={bt['n']}, avg +{bt['avg_max_gain']}% in {bt['forward_days']}d)"
                           if bt else f" — {s['label']} (no backtest sample)")
-                lines.append(f"• {s['symbol']}{bt_str}\n  📊 {_lk.tradingview(s['symbol'])}")
+                _thesis = _lk.app_thesis(s["symbol"])
+                _links = f"📊 {_lk.tradingview(s['symbol'])}"
+                if _thesis:
+                    _links += f"  ·  🔬 full thesis: {_thesis}"
+                lines.append(f"• {s['symbol']}{bt_str}\n  {_links}")
         if deals:
             lines.append("\n🤝 Deals/contracts:")
             for r in deals[:max_deals]:
