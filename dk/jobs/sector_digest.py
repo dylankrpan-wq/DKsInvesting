@@ -96,6 +96,7 @@ def run_once(force: bool = False) -> dict:
         print(f"[sector_digest] bootstrap fetch: {e}")
 
     move_thr = float(dcfg.get("move_threshold_pct", 4.0))
+    max_moves = int(dcfg.get("max_moves", 8))
     max_setups = int(dcfg.get("max_setups", 5))
     max_deals = int(dcfg.get("max_deals", 4))
     max_news = int(dcfg.get("max_news", 5))
@@ -168,11 +169,21 @@ def run_once(force: bool = False) -> dict:
             return {"skipped": "nothing new"}
 
         from dk.util import links as _lk
-        lines = ["🖥️ Tech/AI/Energy sector pulse"]
+        # Header with market context (mood + how many things are active)
+        mood = c.execute(
+            "SELECT composite, label FROM market_sentiment ORDER BY snapshot_ts DESC LIMIT 1"
+        ).fetchone()
+        hdr = "🖥️ Tech/AI/Energy sector pulse"
+        if mood:
+            hdr += f"  ·  Market mood {mood[0]:.0f}/100 ({mood[1]})"
+        lines = [hdr]
         if moves:
-            lines.append("\n📈 Moves:")
-            for sym, chg, px in moves[:6]:
-                lines.append(f"• {sym} {chg:+.1f}% (${px:,.2f}) → {_lk.tradingview(sym)}")
+            up = sum(1 for _, ch, _ in moves if ch > 0)
+            dn = len(moves) - up
+            lines.append(f"\n📈 Moves ({up}▲ {dn}▼):")
+            for sym, chg, px in moves[:max_moves]:
+                arrow = "▲" if chg > 0 else "▼"
+                lines.append(f"• {arrow} {sym} {chg:+.1f}% (${px:,.2f}) → {_lk.tradingview(sym)}")
         if setups:
             lines.append("\n🎯 Setups forming (backtested):")
             for s in setups[:max_setups]:

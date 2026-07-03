@@ -85,14 +85,67 @@ sectors:
     - UEC
     - BE
     - PLUG
+    - VRT        # Vertiv — data-center power/cooling
+    - ETN        # Eaton — grid/electrification
+    - GEV
+    - NRG
+    - TLNE
+
+  ai_software:
+    - CRWV       # CoreWeave — AI cloud
+    - NBIS       # Nebius — AI cloud
+    - APP        # AppLovin
+    - SNPS       # Synopsys (chip design AI)
+    - CDNS       # Cadence
+    - TEAM
+    - MDB
+    - ZS
+    - S          # SentinelOne
+    - PATH       # UiPath
+    - GTLB
+    - ESTC
+    - AI         # C3.ai
+
+  quantum:
+    - IONQ
+    - RGTI
+    - QBTS
+    - QUBT
+    - ARQQ
+    - LAES
+
+  robotics_space:
+    - TSLA
+    - ISRG
+    - ROK
+    - ABB
+    - SYM        # Symbotic
+    - SERV       # Serve Robotics
+    - RKLB       # Rocket Lab
+    - ASTS
+    - LUNR
+    - RDW        # Redwire
+
+  defense_tech:
+    - LMT
+    - RTX
+    - NOC
+    - GD
+    - LHX
+    - PLTR
+    - KTOS
+    - AVAV
+    - LDOS
+    - BWXT
 
 # ~25-min sector digest settings
 sector_digest:
   interval_minutes: 25
   market_hours_only: true      # only push during US pre-market + RTH on trading days
-  move_threshold_pct: 4.0      # flag names moving >= this today
-  max_setups: 5                # top forming setups to include (with backtest)
-  max_deals: 4                 # top deal/M&A headlines
-  max_news: 5                  # top breaking headlines
+  move_threshold_pct: 3.5      # flag names moving >= this today
+  max_moves: 10                # top movers to include
+  max_setups: 8                # top forming setups to include (with backtest)
+  max_deals: 5                 # top deal/M&A headlines
+  max_news: 6                  # top breaking headlines
   backtest_forward_days: 10
   backtest_target_pct: 6.0
