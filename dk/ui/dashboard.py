@@ -1180,6 +1180,14 @@ with tab_thesis:
         if th_sym.upper() in OWNED:
             st.success(f":lock: You hold {th_sym} in a connected broker account.")
         st.markdown(t.narrative)
+        # Research links — let the user verify + dive into the sources
+        try:
+            from dk.util import links as _lk
+            rs = _lk.research_set(th_sym, getattr(t, "company", None))
+            st.markdown("**🔗 Research & sources:** "
+                        + " · ".join(f"[{label}]({url})" for label, url in rs.items()))
+        except Exception:
+            pass
         st.markdown("---")
         st.markdown("#### Chart studio")
         chart_studio.render(th_sym, key=f"thesis_studio_{th_sym}", default_period="6M")

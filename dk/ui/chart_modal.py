@@ -124,6 +124,15 @@ def show_chart_for(symbol: str) -> None:
     except Exception:
         pass
 
+    # Research links — dive into the underlying data / sources
+    try:
+        from dk.util import links as _lk
+        rs = _lk.research_set(symbol)
+        st.markdown("**🔗 Research & sources**")
+        st.markdown(" · ".join(f"[{label}]({url})" for label, url in rs.items()))
+    except Exception:
+        pass
+
     st.caption(":bulb: For the full breakdown, switch to the **Thesis** tab and pick this symbol.")
 
 

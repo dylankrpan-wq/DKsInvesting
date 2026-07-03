@@ -167,11 +167,12 @@ def run_once(force: bool = False) -> dict:
         if not (moves or deals or news or setups):
             return {"skipped": "nothing new"}
 
+        from dk.util import links as _lk
         lines = ["🖥️ Tech/AI/Energy sector pulse"]
         if moves:
             lines.append("\n📈 Moves:")
             for sym, chg, px in moves[:6]:
-                lines.append(f"• {sym} {chg:+.1f}% (${px:,.2f})")
+                lines.append(f"• {sym} {chg:+.1f}% (${px:,.2f}) → {_lk.tradingview(sym)}")
         if setups:
             lines.append("\n🎯 Setups forming (backtested):")
             for s in setups[:max_setups]:
@@ -179,15 +180,17 @@ def run_once(force: bool = False) -> dict:
                 bt_str = (f" — {s['label']} hit {bt['win_rate']}% "
                           f"(n={bt['n']}, avg +{bt['avg_max_gain']}% in {bt['forward_days']}d)"
                           if bt else f" — {s['label']} (no backtest sample)")
-                lines.append(f"• {s['symbol']}{bt_str}")
+                lines.append(f"• {s['symbol']}{bt_str}\n  📊 {_lk.tradingview(s['symbol'])}")
         if deals:
             lines.append("\n🤝 Deals/contracts:")
             for r in deals[:max_deals]:
-                lines.append(f"• {r['symbol']}: {r['title'][:90]}")
+                url = r["url"] or _lk.google_news(r["symbol"])
+                lines.append(f"• {r['symbol']}: {r['title'][:90]}\n  {url}")
         if news:
             lines.append("\n⚡ Breaking:")
             for r in news[:max_news]:
-                lines.append(f"• {r['symbol']}: {r['title'][:90]}")
+                url = r["url"] or _lk.google_news(r["symbol"])
+                lines.append(f"• {r['symbol']}: {r['title'][:90]}\n  {url}")
 
         body = "\n".join(lines)
         sent = _sms._send(body) if _sms.is_configured() else False
