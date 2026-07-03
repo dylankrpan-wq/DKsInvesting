@@ -77,48 +77,61 @@ def active_channel() -> str:
     return "none"
 
 
+def _telegram_chat_ids() -> list[str]:
+    """Parse TELEGRAM_CHAT_ID as a comma/semicolon/space-separated distribution
+    list. One id works exactly as before; multiple ids fan out to everyone."""
+    raw = get_key("TELEGRAM_CHAT_ID") or ""
+    for sep in (";", " ", "\n", "\t"):
+        raw = raw.replace(sep, ",")
+    return [c.strip() for c in raw.split(",") if c.strip()]
+
+
 def _send_telegram(body: str) -> bool:
     token = get_key("TELEGRAM_BOT_TOKEN")
-    chat_id = get_key("TELEGRAM_CHAT_ID")
-    if not (token and chat_id):
+    ids = _telegram_chat_ids()
+    if not (token and ids):
         return False
-    try:
-        import requests
-        r = requests.post(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat_id, "text": body[:4000],
-                  "disable_web_page_preview": True},
-            timeout=15,
-        )
-        if r.status_code == 200:
-            return True
-        print(f"[telegram] HTTP {r.status_code}: {r.text[:200]}")
-        return False
-    except Exception as e:
-        print(f"[telegram] {e}")
-        return False
+    import requests
+    any_ok = False
+    for cid in ids:
+        try:
+            r = requests.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": cid, "text": body[:4000],
+                      "disable_web_page_preview": True},
+                timeout=15,
+            )
+            if r.status_code == 200:
+                any_ok = True
+            else:
+                print(f"[telegram] chat {cid} HTTP {r.status_code}: {r.text[:150]}")
+        except Exception as e:
+            print(f"[telegram] chat {cid} {e}")
+    return any_ok
 
 
 def _send_telegram_photo(image: bytes, caption: str = "") -> bool:
     token = get_key("TELEGRAM_BOT_TOKEN")
-    chat_id = get_key("TELEGRAM_CHAT_ID")
-    if not (token and chat_id):
+    ids = _telegram_chat_ids()
+    if not (token and ids):
         return False
-    try:
-        import requests
-        r = requests.post(
-            f"https://api.telegram.org/bot{token}/sendPhoto",
-            data={"chat_id": chat_id, "caption": caption[:1024]},
-            files={"photo": ("chart.png", image, "image/png")},
-            timeout=30,
-        )
-        if r.status_code == 200:
-            return True
-        print(f"[telegram] sendPhoto HTTP {r.status_code}: {r.text[:200]}")
-        return False
-    except Exception as e:
-        print(f"[telegram] sendPhoto {e}")
-        return False
+    import requests
+    any_ok = False
+    for cid in ids:
+        try:
+            r = requests.post(
+                f"https://api.telegram.org/bot{token}/sendPhoto",
+                data={"chat_id": cid, "caption": caption[:1024]},
+                files={"photo": ("chart.png", image, "image/png")},
+                timeout=30,
+            )
+            if r.status_code == 200:
+                any_ok = True
+            else:
+                print(f"[telegram] sendPhoto chat {cid} HTTP {r.status_code}: {r.text[:150]}")
+        except Exception as e:
+            print(f"[telegram] sendPhoto chat {cid} {e}")
+    return any_ok
 
 
 def send_photo(image: bytes | None, caption: str = "") -> bool:
@@ -137,27 +150,37 @@ def send_photo(image: bytes | None, caption: str = "") -> bool:
             _last_send[0] = time.monotonic()
 
 
+def _sms_numbers() -> list[str]:
+    """SMS_TO_NUMBER as a comma-separated distribution list (E.164 each)."""
+    raw = get_key("SMS_TO_NUMBER") or ""
+    for sep in (";", " ", "\n", "\t"):
+        raw = raw.replace(sep, ",")
+    return [c.strip() for c in raw.split(",") if c.strip()]
+
+
 def _send_twilio(body: str) -> bool:
     sid = get_key("TWILIO_ACCOUNT_SID")
     token = get_key("TWILIO_AUTH_TOKEN")
     frm = get_key("TWILIO_FROM")
-    to = get_key("SMS_TO_NUMBER")
-    if not all([sid, token, frm, to]):
+    nums = _sms_numbers()
+    if not all([sid, token, frm]) or not nums:
         return False
-    try:
-        import requests
-        r = requests.post(
-            f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
-            data={"From": frm, "To": to, "Body": body[:1500]},
-            auth=(sid, token), timeout=15,
-        )
-        if r.status_code in (200, 201):
-            return True
-        print(f"[sms/twilio] HTTP {r.status_code}: {r.text[:200]}")
-        return False
-    except Exception as e:
-        print(f"[sms/twilio] {e}")
-        return False
+    import requests
+    any_ok = False
+    for to in nums:
+        try:
+            r = requests.post(
+                f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
+                data={"From": frm, "To": to, "Body": body[:1500]},
+                auth=(sid, token), timeout=15,
+            )
+            if r.status_code in (200, 201):
+                any_ok = True
+            else:
+                print(f"[sms/twilio] {to} HTTP {r.status_code}: {r.text[:150]}")
+        except Exception as e:
+            print(f"[sms/twilio] {to} {e}")
+    return any_ok
 
 
 def _send_email_gateway(body: str) -> bool:
