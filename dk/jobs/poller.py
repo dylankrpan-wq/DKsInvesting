@@ -65,8 +65,24 @@ def _run_once_impl() -> dict:
     # Crypto-specific news (CoinDesk, The Block, Decrypt, CoinTelegraph)
     summary["news_crypto"] = news_rss.fetch_crypto()
 
-    # Per-ticker news (Yahoo RSS — free)
-    summary["news_per_ticker"] = news_rss.fetch_per_ticker(syms)
+    # Per-ticker news (Yahoo RSS — free). Cover watchlist + the tech/AI/energy
+    # sector universe so deals/live-news reach the sector digest.
+    _news_syms = list(syms)
+    try:
+        import yaml as _yaml
+        from dk.config import CONFIG_DIR as _CD
+        _swp = _CD / "sector_watch.yaml"
+        if _swp.exists():
+            with open(_swp, "r", encoding="utf-8") as _f:
+                _sc = _yaml.safe_load(_f) or {}
+            for _names in (_sc.get("sectors") or {}).values():
+                for _s in (_names or []):
+                    _u = str(_s).upper()
+                    if _u not in _news_syms:
+                        _news_syms.append(_u)
+    except Exception as _e:
+        print(f"[poller] sector news list: {_e}")
+    summary["news_per_ticker"] = news_rss.fetch_per_ticker(_news_syms)
 
     # NewsAPI per ticker (if key set)
     napi_total = 0

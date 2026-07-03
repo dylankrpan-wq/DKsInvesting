@@ -116,6 +116,32 @@ def _equity_ideas_job():
         print(f"  !! equity scorecard failed: {e}")
 
 
+def _sector_digest_job():
+    """~25-min tech/AI/energy sector digest -> phone (moves, deals, news, and
+    backtested setups). Self-gates to market hours inside run_once."""
+    try:
+        from dk.jobs import sector_digest
+        res = sector_digest.run_once()
+        if res.get("sent"):
+            print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] sector digest -> {res}")
+    except Exception as e:
+        print(f"  !! sector digest failed: {e}")
+
+
+def _sector_digest_interval() -> int:
+    try:
+        from dk.config import CONFIG_DIR
+        import yaml
+        p = CONFIG_DIR / "sector_watch.yaml"
+        if p.exists():
+            with open(p, "r", encoding="utf-8") as f:
+                cfg = yaml.safe_load(f) or {}
+            return max(10, int((cfg.get("sector_digest") or {}).get("interval_minutes", 25)))
+    except Exception:
+        pass
+    return 25
+
+
 def _equity_scan_hours() -> str:
     try:
         from dk.config import load_watchlist
@@ -193,6 +219,11 @@ def start_background_scheduler(run_now: bool = True):
     sched.add_job(_equity_ideas_job, CronTrigger(hour=eq_hours, minute=15),
                   id="equity_ideas", max_instances=1, coalesce=True,
                   misfire_grace_time=600)
+    # ~25-min tech/AI/energy sector digest -> phone (market-hours gated inside).
+    sd_min = _sector_digest_interval()
+    sched.add_job(_sector_digest_job, IntervalTrigger(minutes=sd_min),
+                  id="sector_digest", max_instances=1, coalesce=True,
+                  misfire_grace_time=300)
     sched.start()
     _BG_SCHED = sched
     # Catch-up: if we booted (deploy/restart) during RTH on a trading day and no
@@ -279,10 +310,14 @@ def main():
     sched.add_job(_equity_ideas_job, CronTrigger(hour=eq_hours, minute=15),
                   id="equity_ideas", max_instances=1, coalesce=True,
                   misfire_grace_time=600)
+    sd_min = _sector_digest_interval()
+    sched.add_job(_sector_digest_job, IntervalTrigger(minutes=sd_min),
+                  id="sector_digest", max_instances=1, coalesce=True,
+                  misfire_grace_time=300)
     sched.start()
     print(f"DK scheduler running every {POLL_MINUTES} min + hourly pulse "
           f"+ {spike_s}s crypto spike + hourly setup scan + {pm_min}m pre-market "
-          f"scan + equity ideas @{eq_hours}h UTC. Ctrl+C to stop.")
+          f"scan + equity ideas @{eq_hours}h UTC + {sd_min}m sector digest. Ctrl+C to stop.")
 
     stop = False
     def handle(sig, frame):

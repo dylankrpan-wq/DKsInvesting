@@ -101,6 +101,22 @@ def gather_universe() -> dict:
     for s in _equity_watchlist():
         uni.setdefault(s, {"price": None, "chg_pct": None, "volume": None,
                            "market_cap": None, "src": "watchlist"})
+    # Always cover the tech/AI/energy sector universe (config/sector_watch.yaml)
+    # so those names are scanned every run, not only when they're daily movers.
+    try:
+        import yaml
+        from dk.config import CONFIG_DIR
+        _sw = CONFIG_DIR / "sector_watch.yaml"
+        if _sw.exists():
+            with open(_sw, "r", encoding="utf-8") as _f:
+                _scfg = yaml.safe_load(_f) or {}
+            for _names in (_scfg.get("sectors") or {}).values():
+                for _s in (_names or []):
+                    uni.setdefault(str(_s).upper(),
+                                   {"price": None, "chg_pct": None, "volume": None,
+                                    "market_cap": None, "src": "sector"})
+    except Exception as e:
+        print(f"[equity_ideas] sector universe: {e}")
     try:  # discovered market-scan names
         with sqlite3.connect(DB_PATH) as c:
             for r in c.execute(
@@ -119,8 +135,10 @@ def gather_universe() -> dict:
 def _shortlist(uni: dict, max_deep: int) -> list[str]:
     """Always analyze the watchlist; fill the rest with the most active/volatile
     movers (a cheap proxy for 'something is happening here')."""
-    watch = [s for s, d in uni.items() if d.get("src") == "watchlist"]
-    movers = [(s, d) for s, d in uni.items() if d.get("src") != "watchlist"]
+    # Always deep-analyze watchlist AND sector-universe names (tech/AI/energy),
+    # then fill remaining slots with the most active market-wide movers.
+    watch = [s for s, d in uni.items() if d.get("src") in ("watchlist", "sector")]
+    movers = [(s, d) for s, d in uni.items() if d.get("src") not in ("watchlist", "sector")]
 
     def _score(d):
         chg = abs(d.get("chg_pct") or 0)

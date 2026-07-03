@@ -1,0 +1,98 @@
+# Sector coverage universe — always scanned for setups, moves, deals and news,
+# regardless of whether a name is a market-wide mover that day. Feeds the
+# equity-ideas scan and the ~25-min sector digest. Edit freely.
+
+sectors:
+  tech:
+    - MSFT
+    - AAPL
+    - GOOGL
+    - META
+    - AMZN
+    - ORCL
+    - CRM
+    - ADBE
+    - NOW
+    - INTU
+    - IBM
+    - CSCO
+    - QCOM
+    - TXN
+    - ADI
+
+  semis_ai:
+    - NVDA
+    - AMD
+    - AVGO
+    - MU
+    - TSM
+    - ASML
+    - AMAT
+    - LRCX
+    - KLAC
+    - MRVL
+    - ARM
+    - SMCI
+    - DELL
+    - ANET
+    - INTC
+    - "ON"
+    - MPWR
+    - PLTR
+    - SNOW
+    - CRWD
+    - PANW
+    - NET
+    - DDOG
+    - IONQ
+    - RGTI
+    - QBTS
+    - AI
+    - SOUN
+    - BBAI
+
+  energy:
+    - XOM
+    - CVX
+    - COP
+    - SLB
+    - HAL
+    - OXY
+    - EOG
+    - MPC
+    - PSX
+    - VLO
+    - WMB
+    - KMI
+    - LNG
+    - ET
+
+  clean_energy_nuclear:
+    - ENPH
+    - FSLR
+    - RUN
+    - SEDG
+    - NEE
+    - CEG
+    - VST
+    - GEV
+    - TLN
+    - SMR
+    - OKLO
+    - NNE
+    - CCJ
+    - LEU
+    - UEC
+    - BE
+    - PLUG
+
+# ~25-min sector digest settings
+sector_digest:
+  interval_minutes: 25
+  market_hours_only: true      # only push during US pre-market + RTH on trading days
+  move_threshold_pct: 4.0      # flag names moving >= this today
+  max_setups: 5                # top forming setups to include (with backtest)
+  max_deals: 4                 # top deal/M&A headlines
+  max_news: 5                  # top breaking headlines
+  backtest_forward_days: 10
+  backtest_target_pct: 6.0
