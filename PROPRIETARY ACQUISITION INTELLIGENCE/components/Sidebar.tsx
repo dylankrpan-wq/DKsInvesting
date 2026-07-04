@@ -8,12 +8,12 @@ import { LayoutDashboard, Search, Calculator, Network, Target, Building2 } from 
 const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/deals", label: "Deal Explorer", icon: Search },
+  { href: "/rollup", label: "Roll-Up Finder", icon: Network },
   { href: "/sba-calculator", label: "SBA Calculator", icon: Calculator },
 ];
 
 const SOON = [
   { label: "Interactive Map", icon: Target },
-  { label: "Roll-Up Finder", icon: Network },
   { label: "Deal Pipeline CRM", icon: Building2 },
 ];
 
