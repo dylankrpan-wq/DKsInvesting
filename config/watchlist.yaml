@@ -274,7 +274,9 @@ pushes:
 # Broad market highlights push (movers, popular stocks/ETFs, macro + real-world news).
 market_highlights:
   interval_minutes: 30
-  market_hours_only: true
+  # Runs 7am-9pm ET every day (gated only by quiet hours). In a live market
+  # session = full highlights; off-session (weekends/holidays/evenings) = a
+  # lighter NEWS + CRYPTO pulse that only fires when something's genuinely fresh.
   max_movers: 6      # top gainers / losers each
   max_active: 6      # most-active (popular) stocks
   max_etfs: 6        # biggest ETF movers
