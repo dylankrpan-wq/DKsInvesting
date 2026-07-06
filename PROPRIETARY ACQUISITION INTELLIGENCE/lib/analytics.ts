@@ -84,6 +84,8 @@ export interface DealRow {
   industry: string;
   city: string;
   state: string;
+  lat: number;
+  lng: number;
   source: string;
   sourceUrl: string;
   askingPrice: number;
@@ -114,6 +116,8 @@ export function toRow(e: EnrichedListing): DealRow {
     industry: l.industry,
     city: l.city,
     state: l.state,
+    lat: l.lat,
+    lng: l.lng,
     source: l.source,
     sourceUrl: l.sourceUrl,
     askingPrice: l.askingPrice,
