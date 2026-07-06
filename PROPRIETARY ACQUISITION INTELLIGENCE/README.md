@@ -25,11 +25,32 @@ This first release is a **runnable vertical slice** on a realistic seed dataset.
 ## Tech
 Next.js 15 (App Router) · React 19 · TypeScript · TailwindCSS · Recharts · lucide-react.
 
-## Run
-```bash
-npm install
-npm run dev      # http://localhost:3000
+## Run & manage (Windows)
+
+**Easiest — double-click a launcher** (in this folder):
+- **`start_dashboard.bat`** — day-to-day use. Builds the latest code/data, serves at http://localhost:3000, opens your browser. Close the window to stop.
+- **`start_dev.bat`** — while editing. Hot-reloads on every save (no rebuild needed).
+
+**From a terminal** (PowerShell, in this folder):
+```powershell
+npm install        # first time only
+npm run dev        # dev w/ hot reload  -> http://localhost:3000
+# — or —
+npm run build      # production build
+npm run start      # serve the build    -> http://localhost:3000
 ```
+
+**Everyday tasks**
+| Task | How |
+|---|---|
+| Start it | double-click `start_dashboard.bat` |
+| Stop it | close the launcher window (or Ctrl+C in the terminal) |
+| Add / edit a business | edit `data/listings.ts`, then rebuild (or just save in dev mode) |
+| Retune scoring/valuation | edit the engine in `lib/`, rebuild |
+| Port 3000 busy | `npm run start -- -p 3100` (or `set PORT=3100` before the `.bat`) |
+| Reset dependencies | delete `node_modules` + `package-lock.json`, run `npm install` |
+
+Dev vs. production: **dev** (`start_dev.bat`) is for editing — instant reload, slower pages. **Production** (`start_dashboard.bat`) builds once then serves fast — use it when you're just *using* the tool. All data is local; nothing leaves your machine.
 
 ## Roadmap (next phases)
 1. **Live data connectors** — BizBuySell / BizQuest / LoopNet / Acquire.com ingestion + normalization pipeline into Postgres.
