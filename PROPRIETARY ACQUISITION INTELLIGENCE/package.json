@@ -7,18 +7,24 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "ingest": "node scripts/ingest.mjs",
+    "fetch:apify": "node scripts/fetch-apify.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
     "clsx": "2.1.1",
+    "leaflet": "^1.9.4",
     "lucide-react": "0.469.0",
     "next": "^15.5.20",
     "react": "19.0.0",
     "react-dom": "19.0.0",
+    "react-leaflet": "^5.0.0",
     "recharts": "2.15.0",
     "tailwind-merge": "2.6.0"
   },
   "devDependencies": {
+    "@types/leaflet": "^1.9.21",
     "@types/node": "22.10.5",
     "@types/react": "19.0.7",
     "@types/react-dom": "19.0.3",

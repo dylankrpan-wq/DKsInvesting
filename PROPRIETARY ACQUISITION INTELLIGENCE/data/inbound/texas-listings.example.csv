@@ -1,0 +1,2 @@
+name,industry,city,state,zip,askingPrice,revenue,sde,recurringRevenuePct,yearsEstablished,employees,sellerFinancingAvailable,sellerFinancingPct,daysOnMarket,priceReductions,reasonForSale,source,sourceUrl,description
+EXAMPLE — Hill Country HVAC (replace me),HVAC,New Braunfels,TX,78130,950000,2100000,340000,40,17,12,true,10,45,0,Owner retiring,Broker/Manual,https://example.com/listing/123,"Delete this row. It only shows the column format — real rows are added by you (paste from a broker CIM) or written by scripts/fetch-apify.mjs."

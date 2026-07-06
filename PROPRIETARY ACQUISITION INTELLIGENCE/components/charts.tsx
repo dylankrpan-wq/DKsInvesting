@@ -17,6 +17,9 @@ import {
   PolarGrid,
   PolarAngleAxis,
   PolarRadiusAxis,
+  ComposedChart,
+  Line,
+  Legend,
 } from "recharts";
 
 const AXIS = { stroke: "#5f7183", fontSize: 11 };
@@ -76,6 +79,43 @@ export function ScoreRadar({ data }: { data: { label: string; score: number }[] 
           }
         />
       </RadarChart>
+    </ResponsiveContainer>
+  );
+}
+
+export function PortfolioForecast({
+  data,
+}: {
+  data: { year: string; ebitda: number; fcf: number; debt: number }[];
+}) {
+  const money = (v: number) => `$${(v / 1_000_000).toFixed(1)}M`;
+  return (
+    <ResponsiveContainer width="100%" height={280}>
+      <ComposedChart data={data} margin={{ left: 8, right: 8, top: 8, bottom: 4 }}>
+        <CartesianGrid stroke={GRID} vertical={false} />
+        <XAxis dataKey="year" tick={AXIS} axisLine={{ stroke: GRID }} tickLine={false} />
+        <YAxis tick={AXIS} axisLine={false} tickLine={false} tickFormatter={money} width={48} />
+        <Tooltip
+          cursor={{ fill: "rgba(255,255,255,0.03)" }}
+          content={({ active, payload, label }) =>
+            active && payload?.length ? (
+              <TipBox>
+                <div className="mb-1 font-semibold text-ink-100">{label}</div>
+                {payload.map((p) => (
+                  <div key={p.name} className="flex justify-between gap-4 text-ink-300">
+                    <span style={{ color: p.color as string }}>{p.name}</span>
+                    <span>{money(p.value as number)}</span>
+                  </div>
+                ))}
+              </TipBox>
+            ) : null
+          }
+        />
+        <Legend wrapperStyle={{ fontSize: 11, color: "#9fb0c3" }} />
+        <Bar dataKey="ebitda" name="EBITDA" fill="#22d3ee" radius={[3, 3, 0, 0]} maxBarSize={28} />
+        <Bar dataKey="fcf" name="FCF to equity" fill="#22c55e" radius={[3, 3, 0, 0]} maxBarSize={28} />
+        <Line dataKey="debt" name="Debt balance" stroke="#f59e0b" strokeWidth={2} dot={false} />
+      </ComposedChart>
     </ResponsiveContainer>
   );
 }

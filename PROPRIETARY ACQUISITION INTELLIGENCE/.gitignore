@@ -6,3 +6,15 @@ next-env.d.ts
 *.tsbuildinfo
 .env*.local
 .DS_Store
+
+# The PARENT repo's .gitignore ignores `data/` and `.claude/` globally (for the
+# Python project). Re-include THIS app's own data + launch config so the
+# Next.js app is self-contained and actually builds from a clean clone.
+!data/
+!.claude/
+.claude/settings.local.json
+
+# Private imported deal data — keep the template + README, ignore real drops
+data/inbound/*.csv
+!data/inbound/*.example.csv
+data/geocache.json

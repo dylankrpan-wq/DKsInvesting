@@ -84,6 +84,8 @@ export interface DealRow {
   industry: string;
   city: string;
   state: string;
+  lat: number;
+  lng: number;
   source: string;
   sourceUrl: string;
   askingPrice: number;
@@ -104,6 +106,10 @@ export interface DealRow {
   sellerFinancing: boolean;
   ownerInvolvement: string;
   status: string;
+  // market intelligence
+  marketMedianIncome: number;
+  marketPopulationGrowthPct: number;
+  competitorDensity: string;
 }
 
 export function toRow(e: EnrichedListing): DealRow {
@@ -114,6 +120,8 @@ export function toRow(e: EnrichedListing): DealRow {
     industry: l.industry,
     city: l.city,
     state: l.state,
+    lat: l.lat,
+    lng: l.lng,
     source: l.source,
     sourceUrl: l.sourceUrl,
     askingPrice: l.askingPrice,
@@ -134,6 +142,9 @@ export function toRow(e: EnrichedListing): DealRow {
     sellerFinancing: l.sellerFinancingAvailable,
     ownerInvolvement: l.ownerInvolvement,
     status: l.status,
+    marketMedianIncome: l.marketMedianIncome,
+    marketPopulationGrowthPct: l.marketPopulationGrowthPct,
+    competitorDensity: l.competitorDensity,
   };
 }
 

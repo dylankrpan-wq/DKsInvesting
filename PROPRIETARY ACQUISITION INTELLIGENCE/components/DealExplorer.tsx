@@ -6,7 +6,9 @@ import type { DealRow } from "@/lib/analytics";
 import { fmtMoney, fmtMultiple, fmtPct } from "@/lib/format";
 import { GradePill, ActionBadge, Badge } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { Search, X } from "lucide-react";
+import { stateName, STATE_NAMES } from "@/lib/usStates";
+import { toCsv, downloadText, type Column } from "@/lib/csv";
+import { Search, X, Download } from "lucide-react";
 
 type SortKey = "score" | "askingPrice" | "sde" | "multiple" | "askingVsFairPct" | "motivation" | "daysOnMarket";
 
@@ -17,42 +19,104 @@ const NL_HINTS = [
   "reduced price absentee",
 ];
 
-/** Lightweight natural-language filter — parses common intents from free text. */
+const STOPWORDS = new Set([
+  "with", "over", "than", "and", "the", "for", "under", "business", "businesses",
+  "revenue", "margin", "margins", "eligible", "financing", "owner", "priced",
+]);
+
+/** One row flattened to a lowercase haystack for free-text matching. */
+function haystack(r: DealRow): string {
+  return `${r.name} ${r.industry} ${r.city} ${r.state} ${r.source}`.toLowerCase();
+}
+
+/** Short tokens (≤3) match on word boundaries ("IT", "spa"); longer match as substrings. */
+function tokenMatches(hay: string, token: string): boolean {
+  return token.length <= 3 ? new RegExp(`\\b${token}\\b`).test(hay) : hay.includes(token);
+}
+
+/** Lightweight natural-language filter — parses common intents, then free-text tokens. */
 function applyNaturalLanguage(rows: DealRow[], q: string): DealRow[] {
-  const s = q.toLowerCase();
+  const s = q.toLowerCase().trim();
+  if (!s) return rows;
   let out = rows;
-  const priceUnder = s.match(/under \$?([\d.]+)\s*(m|million|k)?/);
+
+  // --- structured intents ---
+  const priceUnder = s.match(/under\s*\$?\s*([\d.,]+)\s*(m|million|k|mm)?/);
   if (priceUnder) {
-    let v = parseFloat(priceUnder[1]);
-    if (priceUnder[2]?.startsWith("m")) v *= 1_000_000;
-    else if (priceUnder[2] === "k") v *= 1_000;
-    else if (v < 100) v *= 1_000_000; // "under 1" => 1M
-    out = out.filter((r) => r.askingPrice <= v);
+    let v = parseFloat(priceUnder[1].replace(/,/g, ""));
+    const unit = priceUnder[2];
+    if (unit?.startsWith("m")) v *= 1_000_000;
+    else if (unit === "k") v *= 1_000;
+    else if (v < 100) v *= 1_000_000; // "under 1.5" => 1.5M
+    if (Number.isFinite(v)) out = out.filter((r) => r.askingPrice <= v);
   }
   const recurring = s.match(/recurring[^\d]*(\d+)/);
   if (recurring) out = out.filter((r) => r.recurringRevenuePct >= parseInt(recurring[1], 10));
-  if (/seller financ/.test(s)) out = out.filter((r) => r.sellerFinancing);
-  if (/sba/.test(s)) out = out.filter((r) => r.sbaEligible);
+  if (/seller\s*financ/.test(s)) out = out.filter((r) => r.sellerFinancing);
+  if (/\bsba\b/.test(s)) out = out.filter((r) => r.sbaEligible);
   if (/absentee/.test(s)) out = out.filter((r) => r.ownerInvolvement !== "owner_operated");
   if (/reduc|price cut|dropped/.test(s)) out = out.filter((r) => r.priceReductions > 0);
   if (/undervalued|cheap|discount/.test(s)) out = out.filter((r) => r.askingVsFairPct < 0);
-  // free-text industry / location match on leftover words
-  const words = s
-    .replace(/under \$?[\d.]+\s*(m|million|k)?/g, "")
-    .replace(/recurring[^\d]*\d+%?/g, "")
-    .split(/\s+/)
-    .filter((w) => w.length > 3 && !["with", "over", "than", "seller", "financing", "sba", "eligible", "absentee", "reduced", "price", "undervalued"].includes(w));
-  for (const w of words) {
-    const matched = out.filter(
-      (r) => r.industry.toLowerCase().includes(w) || r.city.toLowerCase().includes(w) || r.state.toLowerCase() === w || r.name.toLowerCase().includes(w)
-    );
-    if (matched.length) out = matched;
+
+  // --- full state-name match (e.g. "texas" -> TX) ---
+  let text = s;
+  for (const [code, name] of Object.entries(STATE_NAMES)) {
+    const lower = name.toLowerCase();
+    if (s.includes(lower)) {
+      out = out.filter((r) => r.state === code);
+      text = text.replace(new RegExp(lower, "g"), " ");
+      break;
+    }
+  }
+
+  // --- free-text tokens on the combined haystack (AND across tokens) ---
+  const tokens = text
+    .replace(/under\s*\$?\s*[\d.,]+\s*(m|million|k|mm)?/g, " ")
+    .replace(/recurring[^\d]*\d+%?/g, " ")
+    .replace(/seller\s*financ\w*/g, " ")
+    .replace(/\bsba\b|absentee|undervalued|discount\w*|cheap|price\s*cut|reduc\w*|dropped/g, " ")
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 2 && !STOPWORDS.has(t));
+
+  for (const t of tokens) {
+    out = out.filter((r) => tokenMatches(haystack(r), t));
   }
   return out;
 }
 
+const CSV_COLUMNS: Column<DealRow>[] = [
+  { key: "name", header: "Business" },
+  { key: "industry", header: "Industry" },
+  { key: "city", header: "City" },
+  { key: "state", header: "State" },
+  { key: "askingPrice", header: "Asking Price" },
+  { key: "revenue", header: "Revenue" },
+  { key: "sde", header: "SDE" },
+  { key: "ebitda", header: "EBITDA" },
+  { key: "multiple", header: "SDE Multiple", value: (r) => r.multiple.toFixed(2) },
+  { key: "fairValue", header: "Fair Value" },
+  { key: "askingVsFairPct", header: "Asking vs Fair %", value: (r) => r.askingVsFairPct.toFixed(1) },
+  { key: "score", header: "Opportunity Score" },
+  { key: "grade", header: "Grade" },
+  { key: "action", header: "Action" },
+  { key: "motivation", header: "Seller Motivation" },
+  { key: "recurringRevenuePct", header: "Recurring %" },
+  { key: "daysOnMarket", header: "Days on Market" },
+  { key: "priceReductions", header: "Price Cuts" },
+  { key: "sbaEligible", header: "SBA Eligible" },
+  { key: "sellerFinancing", header: "Seller Financing" },
+  { key: "marketMedianIncome", header: "Median Income" },
+  { key: "competitorDensity", header: "Competition" },
+  { key: "sourceUrl", header: "Source URL" },
+];
+
+function exportCsv(rows: DealRow[]) {
+  downloadText(`acquisition-deals-${rows.length}.csv`, toCsv(rows, CSV_COLUMNS), "text/csv;charset=utf-8");
+}
+
 export function DealExplorer({ rows }: { rows: DealRow[] }) {
   const [query, setQuery] = useState("");
+  const [state, setState] = useState<string>("all");
   const [industry, setIndustry] = useState<string>("all");
   const [action, setAction] = useState<string>("all");
   const [minScore, setMinScore] = useState(0);
@@ -65,9 +129,17 @@ export function DealExplorer({ rows }: { rows: DealRow[] }) {
 
   const industries = useMemo(() => ["all", ...Array.from(new Set(rows.map((r) => r.industry))).sort()], [rows]);
 
+  // States present in the data, with deal counts, most-listings first (TX leads today).
+  const states = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of rows) counts.set(r.state, (counts.get(r.state) ?? 0) + 1);
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }, [rows]);
+
   const filtered = useMemo(() => {
     let out = rows;
     if (query.trim()) out = applyNaturalLanguage(out, query);
+    if (state !== "all") out = out.filter((r) => r.state === state);
     if (industry !== "all") out = out.filter((r) => r.industry === industry);
     if (action !== "all") out = out.filter((r) => r.action === action);
     out = out.filter((r) => r.score >= minScore && r.askingPrice <= maxPrice);
@@ -77,7 +149,7 @@ export function DealExplorer({ rows }: { rows: DealRow[] }) {
 
     const mult = dir === "desc" ? -1 : 1;
     return [...out].sort((a, b) => (a[sort] < b[sort] ? -1 : a[sort] > b[sort] ? 1 : 0) * mult);
-  }, [rows, query, industry, action, minScore, maxPrice, sbaOnly, financingOnly, recurringOnly, sort, dir]);
+  }, [rows, query, state, industry, action, minScore, maxPrice, sbaOnly, financingOnly, recurringOnly, sort, dir]);
 
   function toggleSort(key: SortKey) {
     if (sort === key) setDir(dir === "desc" ? "asc" : "desc");
@@ -124,6 +196,14 @@ export function DealExplorer({ rows }: { rows: DealRow[] }) {
 
       {/* Filters */}
       <div className="panel flex flex-wrap items-end gap-4 p-4">
+        <Field label="State">
+          <select value={state} onChange={(e) => setState(e.target.value)} className="select">
+            <option value="all">All states ({rows.length})</option>
+            {states.map(([code, n]) => (
+              <option key={code} value={code}>{stateName(code)} — {code} ({n})</option>
+            ))}
+          </select>
+        </Field>
         <Field label="Industry">
           <select value={industry} onChange={(e) => setIndustry(e.target.value)} className="select">
             {industries.map((i) => (
@@ -149,8 +229,16 @@ export function DealExplorer({ rows }: { rows: DealRow[] }) {
           <Toggle on={financingOnly} onClick={() => setFinancingOnly(!financingOnly)}>Seller financing</Toggle>
           <Toggle on={recurringOnly} onClick={() => setRecurringOnly(!recurringOnly)}>Recurring ≥40%</Toggle>
         </div>
-        <div className="ml-auto text-xs text-ink-500">
-          <span className="stat-num text-ink-100">{filtered.length}</span> / {rows.length} deals
+        <div className="ml-auto flex items-center gap-3">
+          <button
+            onClick={() => exportCsv(filtered)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-line bg-base-800 px-2.5 py-1.5 text-xs font-medium text-ink-100 hover:bg-base-700"
+          >
+            <Download className="h-3.5 w-3.5" /> Export CSV
+          </button>
+          <span className="text-xs text-ink-500">
+            <span className="stat-num text-ink-100">{filtered.length}</span> / {rows.length} deals
+          </span>
         </div>
       </div>
 
