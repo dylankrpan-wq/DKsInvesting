@@ -9,7 +9,19 @@ import { ScoreRadar } from "@/components/charts";
 import { SbaCalculator } from "@/components/SbaCalculator";
 import { fmtMoney, fmtMultiple, fmtPct, fmtNumber } from "@/lib/format";
 import { PageHeader } from "@/components/PageHeader";
-import { ArrowLeft, ExternalLink, MapPin } from "lucide-react";
+import { stateName } from "@/lib/usStates";
+import { ArrowLeft, ExternalLink, MapPin, Search } from "lucide-react";
+
+/** Seed/demo listings use placeholder ids (L-001…) and have no live source URL. */
+function isSampleListing(id: string): boolean {
+  return /^L-\d+/.test(id);
+}
+
+/** A real BizBuySell landing page for a state, used for sample listings. */
+function bizBuySellStateSearch(state: string): string {
+  const slug = stateName(state).toLowerCase().replace(/\s+/g, "-");
+  return `https://www.bizbuysell.com/${slug}-businesses-for-sale/`;
+}
 
 export function generateStaticParams() {
   return LISTINGS.map((l) => ({ id: l.id }));
@@ -196,11 +208,25 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
         </div>
 
         {/* Source */}
-        <div className="flex items-center justify-between rounded-lg border border-line bg-base-800 px-4 py-3 text-xs text-ink-500">
-          <span className="inline-flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" /> {listing.city}, {listing.state} {listing.zip} · Source: {listing.source}</span>
-          <a href={listing.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-accent-cyan hover:underline">
-            View original listing <ExternalLink className="h-3.5 w-3.5" />
-          </a>
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-base-800 px-4 py-3 text-xs text-ink-500">
+          <span className="inline-flex items-center gap-1.5">
+            <MapPin className="h-3.5 w-3.5" /> {listing.city}, {listing.state} {listing.zip} · Source: {listing.source}
+            {isSampleListing(listing.id) && <Badge tone="warn">Sample data</Badge>}
+          </span>
+          {isSampleListing(listing.id) ? (
+            <span className="inline-flex items-center gap-2">
+              <span className="text-ink-500">Representative demo listing — not a live source.</span>
+              <a href={bizBuySellStateSearch(listing.state)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-accent-cyan hover:underline">
+                <Search className="h-3.5 w-3.5" /> Browse {stateName(listing.state)} on BizBuySell
+              </a>
+            </span>
+          ) : listing.sourceUrl ? (
+            <a href={listing.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-accent-cyan hover:underline">
+              View original listing <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          ) : (
+            <span className="text-ink-500">No source URL on this record.</span>
+          )}
         </div>
       </div>
     </>

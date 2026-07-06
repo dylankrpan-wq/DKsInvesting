@@ -18,43 +18,67 @@ const NL_HINTS = [
   "reduced price absentee",
 ];
 
-/** Lightweight natural-language filter — parses common intents from free text. */
+const STOPWORDS = new Set([
+  "with", "over", "than", "and", "the", "for", "under", "business", "businesses",
+  "revenue", "margin", "margins", "eligible", "financing", "owner", "priced",
+]);
+
+/** One row flattened to a lowercase haystack for free-text matching. */
+function haystack(r: DealRow): string {
+  return `${r.name} ${r.industry} ${r.city} ${r.state} ${r.source}`.toLowerCase();
+}
+
+/** Short tokens (≤3) match on word boundaries ("IT", "spa"); longer match as substrings. */
+function tokenMatches(hay: string, token: string): boolean {
+  return token.length <= 3 ? new RegExp(`\\b${token}\\b`).test(hay) : hay.includes(token);
+}
+
+/** Lightweight natural-language filter — parses common intents, then free-text tokens. */
 function applyNaturalLanguage(rows: DealRow[], q: string): DealRow[] {
-  const s = q.toLowerCase();
+  const s = q.toLowerCase().trim();
+  if (!s) return rows;
   let out = rows;
-  const priceUnder = s.match(/under \$?([\d.]+)\s*(m|million|k)?/);
+
+  // --- structured intents ---
+  const priceUnder = s.match(/under\s*\$?\s*([\d.,]+)\s*(m|million|k|mm)?/);
   if (priceUnder) {
-    let v = parseFloat(priceUnder[1]);
-    if (priceUnder[2]?.startsWith("m")) v *= 1_000_000;
-    else if (priceUnder[2] === "k") v *= 1_000;
-    else if (v < 100) v *= 1_000_000; // "under 1" => 1M
-    out = out.filter((r) => r.askingPrice <= v);
+    let v = parseFloat(priceUnder[1].replace(/,/g, ""));
+    const unit = priceUnder[2];
+    if (unit?.startsWith("m")) v *= 1_000_000;
+    else if (unit === "k") v *= 1_000;
+    else if (v < 100) v *= 1_000_000; // "under 1.5" => 1.5M
+    if (Number.isFinite(v)) out = out.filter((r) => r.askingPrice <= v);
   }
   const recurring = s.match(/recurring[^\d]*(\d+)/);
   if (recurring) out = out.filter((r) => r.recurringRevenuePct >= parseInt(recurring[1], 10));
-  if (/seller financ/.test(s)) out = out.filter((r) => r.sellerFinancing);
-  if (/sba/.test(s)) out = out.filter((r) => r.sbaEligible);
+  if (/seller\s*financ/.test(s)) out = out.filter((r) => r.sellerFinancing);
+  if (/\bsba\b/.test(s)) out = out.filter((r) => r.sbaEligible);
   if (/absentee/.test(s)) out = out.filter((r) => r.ownerInvolvement !== "owner_operated");
   if (/reduc|price cut|dropped/.test(s)) out = out.filter((r) => r.priceReductions > 0);
   if (/undervalued|cheap|discount/.test(s)) out = out.filter((r) => r.askingVsFairPct < 0);
-  // full state-name match (e.g. "texas" -> TX)
+
+  // --- full state-name match (e.g. "texas" -> TX) ---
+  let text = s;
   for (const [code, name] of Object.entries(STATE_NAMES)) {
-    if (s.includes(name.toLowerCase())) {
+    const lower = name.toLowerCase();
+    if (s.includes(lower)) {
       out = out.filter((r) => r.state === code);
+      text = text.replace(new RegExp(lower, "g"), " ");
       break;
     }
   }
-  // free-text industry / location match on leftover words
-  const words = s
-    .replace(/under \$?[\d.]+\s*(m|million|k)?/g, "")
-    .replace(/recurring[^\d]*\d+%?/g, "")
-    .split(/\s+/)
-    .filter((w) => w.length > 3 && !["with", "over", "than", "seller", "financing", "sba", "eligible", "absentee", "reduced", "price", "undervalued"].includes(w));
-  for (const w of words) {
-    const matched = out.filter(
-      (r) => r.industry.toLowerCase().includes(w) || r.city.toLowerCase().includes(w) || r.state.toLowerCase() === w || r.name.toLowerCase().includes(w)
-    );
-    if (matched.length) out = matched;
+
+  // --- free-text tokens on the combined haystack (AND across tokens) ---
+  const tokens = text
+    .replace(/under\s*\$?\s*[\d.,]+\s*(m|million|k|mm)?/g, " ")
+    .replace(/recurring[^\d]*\d+%?/g, " ")
+    .replace(/seller\s*financ\w*/g, " ")
+    .replace(/\bsba\b|absentee|undervalued|discount\w*|cheap|price\s*cut|reduc\w*|dropped/g, " ")
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 2 && !STOPWORDS.has(t));
+
+  for (const t of tokens) {
+    out = out.filter((r) => tokenMatches(haystack(r), t));
   }
   return out;
 }
