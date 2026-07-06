@@ -9,6 +9,7 @@ import { ScoreRadar } from "@/components/charts";
 import { SbaCalculator } from "@/components/SbaCalculator";
 import { fmtMoney, fmtMultiple, fmtPct, fmtNumber } from "@/lib/format";
 import { PageHeader } from "@/components/PageHeader";
+import { TrackButton } from "@/components/pipeline/TrackButton";
 import { stateName } from "@/lib/usStates";
 import { ArrowLeft, ExternalLink, MapPin, Search } from "lucide-react";
 
@@ -47,6 +48,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
         subtitle={`${listing.industry} · ${listing.city}, ${listing.state}`}
         right={
           <div className="flex items-center gap-2">
+            <TrackButton listingId={listing.id} />
             <GradePill grade={score.grade} score={score.overall} />
             <ActionBadge action={score.action} />
           </div>

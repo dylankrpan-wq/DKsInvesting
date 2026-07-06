@@ -10,12 +10,11 @@ const NAV = [
   { href: "/deals", label: "Deal Explorer", icon: Search },
   { href: "/map", label: "Deal Map", icon: Target },
   { href: "/rollup", label: "Roll-Up Finder", icon: Network },
+  { href: "/pipeline", label: "Deal Pipeline", icon: Building2 },
   { href: "/sba-calculator", label: "SBA Calculator", icon: Calculator },
 ];
 
-const SOON = [
-  { label: "Deal Pipeline CRM", icon: Building2 },
-];
+const SOON: { label: string; icon: typeof Building2 }[] = [];
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -49,16 +48,20 @@ export function Sidebar() {
           );
         })}
 
-        <div className="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-ink-500">
-          Roadmap
-        </div>
-        {SOON.map(({ label, icon: Icon }) => (
-          <div key={label} className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-ink-500">
-            <Icon className="h-4 w-4" />
-            <span>{label}</span>
-            <span className="ml-auto rounded bg-base-600 px-1.5 py-0.5 text-[9px] font-medium text-ink-500">SOON</span>
-          </div>
-        ))}
+        {SOON.length > 0 && (
+          <>
+            <div className="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-ink-500">
+              Roadmap
+            </div>
+            {SOON.map(({ label, icon: Icon }) => (
+              <div key={label} className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-ink-500">
+                <Icon className="h-4 w-4" />
+                <span>{label}</span>
+                <span className="ml-auto rounded bg-base-600 px-1.5 py-0.5 text-[9px] font-medium text-ink-500">SOON</span>
+              </div>
+            ))}
+          </>
+        )}
       </nav>
 
       <div className="border-t border-line px-4 py-3 text-[11px] text-ink-500">
