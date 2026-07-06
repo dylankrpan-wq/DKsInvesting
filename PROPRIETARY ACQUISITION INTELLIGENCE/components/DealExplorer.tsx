@@ -7,7 +7,8 @@ import { fmtMoney, fmtMultiple, fmtPct } from "@/lib/format";
 import { GradePill, ActionBadge, Badge } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { stateName, STATE_NAMES } from "@/lib/usStates";
-import { Search, X } from "lucide-react";
+import { toCsv, downloadText, type Column } from "@/lib/csv";
+import { Search, X, Download } from "lucide-react";
 
 type SortKey = "score" | "askingPrice" | "sde" | "multiple" | "askingVsFairPct" | "motivation" | "daysOnMarket";
 
@@ -81,6 +82,36 @@ function applyNaturalLanguage(rows: DealRow[], q: string): DealRow[] {
     out = out.filter((r) => tokenMatches(haystack(r), t));
   }
   return out;
+}
+
+const CSV_COLUMNS: Column<DealRow>[] = [
+  { key: "name", header: "Business" },
+  { key: "industry", header: "Industry" },
+  { key: "city", header: "City" },
+  { key: "state", header: "State" },
+  { key: "askingPrice", header: "Asking Price" },
+  { key: "revenue", header: "Revenue" },
+  { key: "sde", header: "SDE" },
+  { key: "ebitda", header: "EBITDA" },
+  { key: "multiple", header: "SDE Multiple", value: (r) => r.multiple.toFixed(2) },
+  { key: "fairValue", header: "Fair Value" },
+  { key: "askingVsFairPct", header: "Asking vs Fair %", value: (r) => r.askingVsFairPct.toFixed(1) },
+  { key: "score", header: "Opportunity Score" },
+  { key: "grade", header: "Grade" },
+  { key: "action", header: "Action" },
+  { key: "motivation", header: "Seller Motivation" },
+  { key: "recurringRevenuePct", header: "Recurring %" },
+  { key: "daysOnMarket", header: "Days on Market" },
+  { key: "priceReductions", header: "Price Cuts" },
+  { key: "sbaEligible", header: "SBA Eligible" },
+  { key: "sellerFinancing", header: "Seller Financing" },
+  { key: "marketMedianIncome", header: "Median Income" },
+  { key: "competitorDensity", header: "Competition" },
+  { key: "sourceUrl", header: "Source URL" },
+];
+
+function exportCsv(rows: DealRow[]) {
+  downloadText(`acquisition-deals-${rows.length}.csv`, toCsv(rows, CSV_COLUMNS), "text/csv;charset=utf-8");
 }
 
 export function DealExplorer({ rows }: { rows: DealRow[] }) {
@@ -198,8 +229,16 @@ export function DealExplorer({ rows }: { rows: DealRow[] }) {
           <Toggle on={financingOnly} onClick={() => setFinancingOnly(!financingOnly)}>Seller financing</Toggle>
           <Toggle on={recurringOnly} onClick={() => setRecurringOnly(!recurringOnly)}>Recurring ≥40%</Toggle>
         </div>
-        <div className="ml-auto text-xs text-ink-500">
-          <span className="stat-num text-ink-100">{filtered.length}</span> / {rows.length} deals
+        <div className="ml-auto flex items-center gap-3">
+          <button
+            onClick={() => exportCsv(filtered)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-line bg-base-800 px-2.5 py-1.5 text-xs font-medium text-ink-100 hover:bg-base-700"
+          >
+            <Download className="h-3.5 w-3.5" /> Export CSV
+          </button>
+          <span className="text-xs text-ink-500">
+            <span className="stat-num text-ink-100">{filtered.length}</span> / {rows.length} deals
+          </span>
         </div>
       </div>
 

@@ -5,6 +5,7 @@ import { buildDiligence, type Severity } from "@/lib/diligence";
 import { PageHeader } from "@/components/PageHeader";
 import { Panel, PanelHeader, Badge } from "@/components/ui";
 import { MemoActions } from "@/components/MemoActions";
+import { EnhanceMemo } from "@/components/EnhanceMemo";
 import { ArrowLeft, AlertTriangle, FileText, ListChecks, HelpCircle } from "lucide-react";
 
 export function generateStaticParams() {
@@ -105,10 +106,16 @@ export default async function DiligencePage({ params }: { params: Promise<{ id: 
 
         {/* Investment memo */}
         <Panel>
-          <PanelHeader title="Investment Memo" subtitle="Auto-assembled — copy or download above" />
+          <PanelHeader title="Investment Memo" subtitle="Auto-assembled — copy, download, or enhance with Claude" />
           <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap rounded-md border border-line bg-base-900 p-4 font-mono text-[12px] leading-relaxed text-ink-300">
             {dd.memo}
           </pre>
+        </Panel>
+
+        {/* Claude-enhanced narrative memo (optional) */}
+        <Panel>
+          <PanelHeader title="Committee Memo (Claude)" subtitle="Rewrites the memo above into polished IC prose — requires ANTHROPIC_API_KEY" />
+          <EnhanceMemo memo={dd.memo} name={listing.name} filename={`Investment-Memo-${listing.id}.txt`} />
         </Panel>
       </div>
     </>

@@ -106,6 +106,10 @@ export interface DealRow {
   sellerFinancing: boolean;
   ownerInvolvement: string;
   status: string;
+  // market intelligence
+  marketMedianIncome: number;
+  marketPopulationGrowthPct: number;
+  competitorDensity: string;
 }
 
 export function toRow(e: EnrichedListing): DealRow {
@@ -138,6 +142,9 @@ export function toRow(e: EnrichedListing): DealRow {
     sellerFinancing: l.sellerFinancingAvailable,
     ownerInvolvement: l.ownerInvolvement,
     status: l.status,
+    marketMedianIncome: l.marketMedianIncome,
+    marketPopulationGrowthPct: l.marketPopulationGrowthPct,
+    competitorDensity: l.competitorDensity,
   };
 }
 

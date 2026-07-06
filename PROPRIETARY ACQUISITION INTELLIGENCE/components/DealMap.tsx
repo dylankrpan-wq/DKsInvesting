@@ -6,6 +6,7 @@ import type { DealRow } from "@/lib/analytics";
 import { stateName } from "@/lib/usStates";
 import { fmtMoney } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { MAP_METRICS, MAP_METRIC_LIST, type MapMetric } from "@/lib/mapColors";
 
 const DealMapInner = dynamic(() => import("./DealMapInner"), {
   ssr: false,
@@ -16,15 +17,10 @@ const DealMapInner = dynamic(() => import("./DealMapInner"), {
   ),
 });
 
-const LEGEND = [
-  { label: "Strong (70+)", color: "#22c55e" },
-  { label: "Good (55–69)", color: "#22d3ee" },
-  { label: "Watch (44–54)", color: "#f59e0b" },
-  { label: "Weak (<44)", color: "#ef4444" },
-];
-
 export function DealMap({ rows }: { rows: DealRow[] }) {
   const [state, setState] = useState("all");
+  const [colorBy, setColorBy] = useState<MapMetric>("score");
+  const legend = MAP_METRICS[colorBy].legend;
 
   const states = useMemo(() => {
     const counts = new Map<string, number>();
@@ -55,6 +51,19 @@ export function DealMap({ rows }: { rows: DealRow[] }) {
           </select>
         </label>
 
+        <label className="flex items-center gap-2 text-xs">
+          <span className="font-medium uppercase tracking-wider text-ink-500">Color by</span>
+          <select
+            value={colorBy}
+            onChange={(e) => setColorBy(e.target.value as MapMetric)}
+            className="rounded-md border border-line bg-base-900 px-2 py-1.5 text-xs text-ink-100 focus:border-accent focus:outline-none"
+          >
+            {MAP_METRIC_LIST.map((m) => (
+              <option key={m.id} value={m.id}>{m.label}</option>
+            ))}
+          </select>
+        </label>
+
         <div className="flex items-center gap-4 text-xs">
           <Stat label="Shown" value={String(filtered.length)} />
           <Stat label="Total asking" value={fmtMoney(totalAsking, { compact: true })} />
@@ -62,7 +71,7 @@ export function DealMap({ rows }: { rows: DealRow[] }) {
         </div>
 
         <div className="ml-auto flex items-center gap-3">
-          {LEGEND.map((l) => (
+          {legend.map((l) => (
             <span key={l.label} className="flex items-center gap-1.5 text-[11px] text-ink-300">
               <span className="h-2.5 w-2.5 rounded-full" style={{ background: l.color }} />
               {l.label}
@@ -74,7 +83,7 @@ export function DealMap({ rows }: { rows: DealRow[] }) {
 
       {/* Map */}
       <div className="relative flex-1">
-        <DealMapInner rows={filtered} />
+        <DealMapInner rows={filtered} colorBy={colorBy} />
         <div className="pointer-events-none absolute bottom-2 right-2 z-[400] rounded bg-base-900/80 px-2 py-1 text-[9px] text-ink-500">
           © OpenStreetMap © CARTO
         </div>

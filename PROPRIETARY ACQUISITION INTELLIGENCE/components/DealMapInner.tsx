@@ -7,10 +7,7 @@ import "leaflet/dist/leaflet.css";
 import Link from "next/link";
 import type { DealRow } from "@/lib/analytics";
 import { fmtMoney, fmtMultiple } from "@/lib/format";
-
-function scoreColor(score: number): string {
-  return score >= 70 ? "#22c55e" : score >= 55 ? "#22d3ee" : score >= 44 ? "#f59e0b" : "#ef4444";
-}
+import { MAP_METRICS, type MapMetric } from "@/lib/mapColors";
 
 /** Radius in px scaled by asking price. */
 function markerRadius(asking: number): number {
@@ -36,7 +33,8 @@ function FitBounds({ rows }: { rows: DealRow[] }) {
   return null;
 }
 
-export default function DealMapInner({ rows }: { rows: DealRow[] }) {
+export default function DealMapInner({ rows, colorBy = "score" }: { rows: DealRow[]; colorBy?: MapMetric }) {
+  const colorFn = MAP_METRICS[colorBy].color;
   return (
     <MapContainer
       center={[39.5, -98.35]}
@@ -56,8 +54,8 @@ export default function DealMapInner({ rows }: { rows: DealRow[] }) {
           center={[r.lat, r.lng]}
           radius={markerRadius(r.askingPrice)}
           pathOptions={{
-            color: scoreColor(r.score),
-            fillColor: scoreColor(r.score),
+            color: colorFn(r),
+            fillColor: colorFn(r),
             fillOpacity: 0.55,
             weight: 1.5,
           }}

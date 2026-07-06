@@ -12,6 +12,7 @@
     "fetch:apify": "node scripts/fetch-apify.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
     "clsx": "2.1.1",
     "leaflet": "^1.9.4",
     "lucide-react": "0.469.0",
