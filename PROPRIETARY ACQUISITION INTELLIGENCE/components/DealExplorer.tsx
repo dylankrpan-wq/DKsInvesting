@@ -6,6 +6,7 @@ import type { DealRow } from "@/lib/analytics";
 import { fmtMoney, fmtMultiple, fmtPct } from "@/lib/format";
 import { GradePill, ActionBadge, Badge } from "@/components/ui";
 import { cn } from "@/lib/cn";
+import { stateName, STATE_NAMES } from "@/lib/usStates";
 import { Search, X } from "lucide-react";
 
 type SortKey = "score" | "askingPrice" | "sde" | "multiple" | "askingVsFairPct" | "motivation" | "daysOnMarket";
@@ -36,6 +37,13 @@ function applyNaturalLanguage(rows: DealRow[], q: string): DealRow[] {
   if (/absentee/.test(s)) out = out.filter((r) => r.ownerInvolvement !== "owner_operated");
   if (/reduc|price cut|dropped/.test(s)) out = out.filter((r) => r.priceReductions > 0);
   if (/undervalued|cheap|discount/.test(s)) out = out.filter((r) => r.askingVsFairPct < 0);
+  // full state-name match (e.g. "texas" -> TX)
+  for (const [code, name] of Object.entries(STATE_NAMES)) {
+    if (s.includes(name.toLowerCase())) {
+      out = out.filter((r) => r.state === code);
+      break;
+    }
+  }
   // free-text industry / location match on leftover words
   const words = s
     .replace(/under \$?[\d.]+\s*(m|million|k)?/g, "")
@@ -53,6 +61,7 @@ function applyNaturalLanguage(rows: DealRow[], q: string): DealRow[] {
 
 export function DealExplorer({ rows }: { rows: DealRow[] }) {
   const [query, setQuery] = useState("");
+  const [state, setState] = useState<string>("all");
   const [industry, setIndustry] = useState<string>("all");
   const [action, setAction] = useState<string>("all");
   const [minScore, setMinScore] = useState(0);
@@ -65,9 +74,17 @@ export function DealExplorer({ rows }: { rows: DealRow[] }) {
 
   const industries = useMemo(() => ["all", ...Array.from(new Set(rows.map((r) => r.industry))).sort()], [rows]);
 
+  // States present in the data, with deal counts, most-listings first (TX leads today).
+  const states = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of rows) counts.set(r.state, (counts.get(r.state) ?? 0) + 1);
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }, [rows]);
+
   const filtered = useMemo(() => {
     let out = rows;
     if (query.trim()) out = applyNaturalLanguage(out, query);
+    if (state !== "all") out = out.filter((r) => r.state === state);
     if (industry !== "all") out = out.filter((r) => r.industry === industry);
     if (action !== "all") out = out.filter((r) => r.action === action);
     out = out.filter((r) => r.score >= minScore && r.askingPrice <= maxPrice);
@@ -77,7 +94,7 @@ export function DealExplorer({ rows }: { rows: DealRow[] }) {
 
     const mult = dir === "desc" ? -1 : 1;
     return [...out].sort((a, b) => (a[sort] < b[sort] ? -1 : a[sort] > b[sort] ? 1 : 0) * mult);
-  }, [rows, query, industry, action, minScore, maxPrice, sbaOnly, financingOnly, recurringOnly, sort, dir]);
+  }, [rows, query, state, industry, action, minScore, maxPrice, sbaOnly, financingOnly, recurringOnly, sort, dir]);
 
   function toggleSort(key: SortKey) {
     if (sort === key) setDir(dir === "desc" ? "asc" : "desc");
@@ -124,6 +141,14 @@ export function DealExplorer({ rows }: { rows: DealRow[] }) {
 
       {/* Filters */}
       <div className="panel flex flex-wrap items-end gap-4 p-4">
+        <Field label="State">
+          <select value={state} onChange={(e) => setState(e.target.value)} className="select">
+            <option value="all">All states ({rows.length})</option>
+            {states.map(([code, n]) => (
+              <option key={code} value={code}>{stateName(code)} — {code} ({n})</option>
+            ))}
+          </select>
+        </Field>
         <Field label="Industry">
           <select value={industry} onChange={(e) => setIndustry(e.target.value)} className="select">
             {industries.map((i) => (
