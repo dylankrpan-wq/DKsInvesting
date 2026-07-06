@@ -9,7 +9,7 @@
 // so imported businesses are scored, valued, mapped and filtered automatically.
 // ============================================================================
 
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -17,6 +17,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const INBOUND = join(ROOT, "data", "inbound");
 const OUT = join(ROOT, "data", "ingested.json");
+const GEOCACHE = join(ROOT, "data", "geocache.json");
+const NO_GEOCODE = /^(1|true|yes)$/i.test(process.env.NO_GEOCODE || "");
 
 // Approx state centroids for lat/lng fallback when a row omits coordinates.
 const STATE_CENTROID = {
@@ -74,6 +76,7 @@ function normalize(rec) {
     ? rec.competitordensity.trim() : "medium";
 
   const id = (rec.id && rec.id.trim()) || `IN-${state}-${slug(rec.name)}`;
+  const hasCoords = !!(rec.lat && rec.lng);
   return {
     id,
     name: rec.name.trim(),
@@ -84,8 +87,10 @@ function normalize(rec) {
     city: (rec.city || "").trim(),
     state,
     zip: (rec.zip || "").trim(),
-    lat: rec.lat ? num(rec.lat) : centroid[0],
-    lng: rec.lng ? num(rec.lng) : centroid[1],
+    lat: hasCoords ? num(rec.lat) : centroid[0],
+    lng: hasCoords ? num(rec.lng) : centroid[1],
+    _needsGeo: !hasCoords, // stripped after geocoding
+
     askingPrice,
     originalAskingPrice: num(rec.originalaskingprice, askingPrice),
     revenue,
@@ -121,7 +126,58 @@ function normalize(rec) {
   };
 }
 
-function main() {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Geocode "city, state" via OpenStreetMap Nominatim (free, no key). Respects
+ * the usage policy: <=1 req/sec, descriptive User-Agent, and a local cache so
+ * a city is only ever looked up once. Falls back to the state centroid.
+ */
+async function geocodeMissing(listings) {
+  const targets = listings.filter((l) => l._needsGeo && l.city);
+  if (!targets.length || NO_GEOCODE) {
+    if (NO_GEOCODE && targets.length) console.log(`Skipping geocoding (${targets.length} rows) — NO_GEOCODE set; using state centroids.`);
+    return;
+  }
+
+  let cache = {};
+  if (existsSync(GEOCACHE)) {
+    try { cache = JSON.parse(readFileSync(GEOCACHE, "utf8")); } catch { cache = {}; }
+  }
+
+  let looked = 0, fromCache = 0, failed = 0;
+  console.log(`\nGeocoding ${targets.length} row(s) without coordinates…`);
+  for (const l of targets) {
+    const key = `${l.city.toLowerCase()}|${l.state}`;
+    if (cache[key]) {
+      [l.lat, l.lng] = cache[key];
+      fromCache++;
+      continue;
+    }
+    try {
+      const q = encodeURIComponent(`${l.city}, ${l.state}, USA`);
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=${q}`;
+      const res = await fetch(url, { headers: { "User-Agent": "AcquisitionIntelligence/0.1 (personal deal-sourcing tool)" } });
+      if (res.ok) {
+        const hits = await res.json();
+        if (Array.isArray(hits) && hits[0]) {
+          const coord = [parseFloat(hits[0].lat), parseFloat(hits[0].lon)];
+          cache[key] = coord;
+          [l.lat, l.lng] = coord;
+          looked++;
+        } else failed++;
+      } else failed++;
+      await sleep(1100); // Nominatim: max 1 request/second
+    } catch {
+      failed++;
+    }
+  }
+
+  writeFileSync(GEOCACHE, JSON.stringify(cache, null, 2) + "\n");
+  console.log(`  geocoded ${looked} new, ${fromCache} from cache, ${failed} fell back to state centroid.`);
+}
+
+async function main() {
   let files;
   try {
     files = readdirSync(INBOUND).filter((f) => f.toLowerCase().endsWith(".csv") && !f.toLowerCase().endsWith(".example.csv"));
@@ -152,6 +208,9 @@ function main() {
   }
 
   const out = Array.from(byId.values());
+  await geocodeMissing(out);
+  for (const l of out) delete l._needsGeo; // internal flag, not part of the record
+
   writeFileSync(OUT, JSON.stringify(out, null, 2) + "\n");
   console.log(`\nIngested ${out.length} listings from ${files.length} file(s) (${rowsSeen} rows seen, ${skipped} skipped for missing name/state/price/SDE).`);
   console.log(`Wrote ${OUT}. Rebuild or restart the app to see them.`);

@@ -11,7 +11,7 @@ import { fmtMoney, fmtMultiple, fmtPct, fmtNumber } from "@/lib/format";
 import { PageHeader } from "@/components/PageHeader";
 import { TrackButton } from "@/components/pipeline/TrackButton";
 import { stateName } from "@/lib/usStates";
-import { ArrowLeft, ExternalLink, MapPin, Search } from "lucide-react";
+import { ArrowLeft, ExternalLink, MapPin, Search, ClipboardCheck } from "lucide-react";
 
 /** Seed/demo listings use placeholder ids (L-001…) and have no live source URL. */
 function isSampleListing(id: string): boolean {
@@ -48,6 +48,9 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
         subtitle={`${listing.industry} · ${listing.city}, ${listing.state}`}
         right={
           <div className="flex items-center gap-2">
+            <Link href={`/deals/${listing.id}/diligence`} className="inline-flex items-center gap-1.5 rounded-md border border-line bg-base-700 px-3 py-1.5 text-xs font-medium text-ink-100 hover:bg-base-600">
+              <ClipboardCheck className="h-3.5 w-3.5" /> Due Diligence
+            </Link>
             <TrackButton listingId={listing.id} />
             <GradePill grade={score.grade} score={score.overall} />
             <ActionBadge action={score.action} />

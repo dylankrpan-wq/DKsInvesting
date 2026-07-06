@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { LayoutDashboard, Search, Calculator, Network, Target, Building2 } from "lucide-react";
+import { LayoutDashboard, Search, Calculator, Network, Target, Building2, LineChart } from "lucide-react";
 
 const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -11,6 +11,7 @@ const NAV = [
   { href: "/map", label: "Deal Map", icon: Target },
   { href: "/rollup", label: "Roll-Up Finder", icon: Network },
   { href: "/pipeline", label: "Deal Pipeline", icon: Building2 },
+  { href: "/portfolio", label: "Portfolio Sim", icon: LineChart },
   { href: "/sba-calculator", label: "SBA Calculator", icon: Calculator },
 ];
 
