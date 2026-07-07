@@ -35,6 +35,8 @@ KIND_META = {
     "CRYPTO_SPIKE":     ("Crypto Spike", "🚨", "A derivatives pair just spiked hard in minutes — fast, often short-lived."),
     "CUSTOM":           ("Your Trigger", "🔔", "A custom alert you set has fired."),
     "TECH_SIGNAL":      ("Technical", "📐", "A technical indicator just fired (RSI/MACD/cross/breakout)."),
+    "ANALYST_ACTION":   ("Analyst", "🏦", "A Wall St analyst just changed their rating on this name."),
+    "ECON_PRINT":       ("Econ Data", "📊", "A key US economic release just posted its actual number."),
 }
 
 # Base priority per kind (0-100). Boosted by ownership/watchlist/recency.
@@ -60,6 +62,8 @@ KIND_PRIORITY = {
     "MACRO_NEAR": 52,
     "CUSTOM": 70,
     "TECH_SIGNAL": 68,
+    "ANALYST_ACTION": 76,
+    "ECON_PRINT": 82,
 }
 
 

@@ -137,6 +137,19 @@ def _run_once_impl() -> dict:
         print(f"[x_feeds] {e}")
         summary["x_posts"] = 0
 
+    # Analyst upgrades/downgrades (Finnhub key) + economic prints (FMP key)
+    from dk.sources import analyst_actions, economic_calendar
+    try:
+        summary["analyst_actions"] = analyst_actions.fetch_and_alert()
+    except Exception as e:
+        print(f"[analyst_actions] {e}")
+        summary["analyst_actions"] = {"error": str(e)}
+    try:
+        summary["econ_prints"] = economic_calendar.fetch_and_alert()
+    except Exception as e:
+        print(f"[economic_calendar] {e}")
+        summary["econ_prints"] = {"error": str(e)}
+
     # TradingView technical ratings (free; no account needed)
     from dk.sources import tradingview_ratings
     try:

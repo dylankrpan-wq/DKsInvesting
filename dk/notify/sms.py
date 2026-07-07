@@ -36,6 +36,7 @@ DEFAULT_LIVE_KINDS = [
     "CONVICTION_LONG", "CONVICTION_SHORT", "CRYPTO_SPIKE", "SETUP_SCAN",
     "PREMARKET_GAP", "HIGH_IMPACT_NEWS", "NEWS_VELOCITY", "PERSON_ACTIVITY",
     "EVENT_NEAR", "MACRO_NEAR", "EARNINGS_NEAR", "RANK_JUMP", "NEW_TOP", "TECH_SIGNAL",
+    "ANALYST_ACTION", "ECON_PRINT",
 ]
 
 CARRIER_GATEWAYS = {
@@ -212,18 +213,49 @@ def _send_email_gateway(body: str) -> bool:
         return False
 
 
-def _send(body: str) -> bool:
-    # Serialize + throttle so concurrent jobs don't burst the chat past Telegram's
-    # ~1 msg/sec limit (which silently drops messages).
+def _chunk_text(body: str, cap: int) -> list[str]:
+    """Split `body` into pieces <= cap, preferring line boundaries so sections
+    stay intact. A single over-long line is hard-split as a last resort."""
+    if len(body) <= cap:
+        return [body]
+    chunks, cur = [], ""
+    for ln in body.split("\n"):
+        while len(ln) > cap:
+            if cur:
+                chunks.append(cur); cur = ""
+            chunks.append(ln[:cap]); ln = ln[cap:]
+        if cur and len(cur) + 1 + len(ln) > cap:
+            chunks.append(cur); cur = ln
+        else:
+            cur = (cur + "\n" + ln) if cur else ln
+    if cur:
+        chunks.append(cur)
+    return chunks
+
+
+def _send_one(body: str) -> bool:
+    """Throttled single-message send (Telegram → Twilio → email)."""
     with _send_lock:
         gap = time.monotonic() - _last_send[0]
         if gap < _MIN_SEND_GAP:
             time.sleep(_MIN_SEND_GAP - gap)
         try:
-            # Telegram first — free, instant, no carrier approval needed.
             return _send_telegram(body) or _send_twilio(body) or _send_email_gateway(body)
         finally:
             _last_send[0] = time.monotonic()
+
+
+def _send(body: str) -> bool:
+    """Send `body`, auto-splitting into multiple messages if it exceeds the
+    active channel's size cap — so long digests are NEVER truncated."""
+    cap = _CHANNEL_CAPS.get(active_channel(), 1500)
+    chunks = _chunk_text(body, cap - 12)  # leave room for the "(i/n)" marker
+    if len(chunks) > 1:
+        chunks = [f"{c}\n({i+1}/{len(chunks)})" for i, c in enumerate(chunks)]
+    ok = False
+    for ch in chunks:
+        ok = _send_one(ch) or ok
+    return ok
 
 
 def send_test() -> bool:
