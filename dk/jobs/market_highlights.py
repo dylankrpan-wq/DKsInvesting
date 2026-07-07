@@ -80,6 +80,16 @@ def run_once(force: bool = False) -> dict:
                             key=lambda e: abs(e["change_pct"]), reverse=True)
         etf_by_sym = {e["symbol"]: e for e in etfs}
 
+    # ---- Indices + sector rotation (in-session only — last close is stale off-hrs) ----
+    idx, secs = [], []
+    if in_session:
+        try:
+            from dk.sources import market_snapshot
+            idx = market_snapshot.indices()
+            secs = market_snapshot.sectors()
+        except Exception as e:
+            print(f"[highlights] snapshot: {e}")
+
     # ---- Crypto (24/7) — always available, incl. weekends/holidays/evenings ----
     crypto = []
     try:
@@ -99,6 +109,20 @@ def run_once(force: bool = False) -> dict:
         if mood:
             hdr += f"  ·  Mood {mood[0]:.0f}/100 ({mood[1]})"
         lines.append(hdr)
+
+        # Indices — the headline market read
+        if idx:
+            lines.append("\n📇 Indices:")
+            lines.append("  " + " · ".join(
+                f"{i['name']} {i['change_pct']:+.2f}%" for i in idx
+                if i.get("change_pct") is not None))
+        # Sector rotation — who's leading / lagging
+        if len(secs) >= 4:
+            lead = ", ".join(f"{s['name'].split()[0]} {s['change_pct']:+.1f}%" for s in secs[:3])
+            lag = ", ".join(f"{s['name'].split()[0]} {s['change_pct']:+.1f}%" for s in secs[-3:])
+            lines.append("\n🧭 Sector rotation:")
+            lines.append(f"  🟢 Leading: {lead}")
+            lines.append(f"  🔴 Lagging: {lag}")
 
         if gainers:
             lines.append("\n🚀 Top gainers:")
@@ -174,6 +198,7 @@ def run_once(force: bool = False) -> dict:
                 _mark(c, f"mkt::{r['id']}")
             c.commit()
 
-    return {"sent": bool(sent), "in_session": in_session, "gainers": len(gainers),
-            "losers": len(losers), "actives": len(actives), "etfs": len(etfs),
-            "crypto": len(crypto), "news": len(fresh_news)}
+    return {"sent": bool(sent), "in_session": in_session, "indices": len(idx),
+            "sectors": len(secs), "gainers": len(gainers), "losers": len(losers),
+            "actives": len(actives), "etfs": len(etfs), "crypto": len(crypto),
+            "news": len(fresh_news)}

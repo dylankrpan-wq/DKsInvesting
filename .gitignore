@@ -18,3 +18,6 @@ uv.lock
 
 # Generated pair-screen reports
 pair_trade_analysis_*.md
+
+# Separate Next.js project — not part of DK Investing
+PROPRIETARY ACQUISITION INTELLIGENCE/
