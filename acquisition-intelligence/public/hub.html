@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Acquisition Intelligence — DK Investing</title>
+<meta name="description" content="Source, score, value and monitor profitable businesses for sale. Open any dashboard — no account required." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a0e14'/%3E%3Ctext x='16' y='21' font-family='monospace' font-size='13' font-weight='700' fill='%2322d3ee' text-anchor='middle'%3EAI%3C/text%3E%3C/svg%3E" />
+<style>
+  :root {
+    --bg:#0a0e14; --panel:#121821; --panel-2:#161d28; --raised:#1c2430;
+    --line:#1e2732; --line-2:#26313f; --ink:#e6edf3; --ink-2:#9fb0c3; --ink-3:#5f7183;
+    --blue:#3b82f6; --cyan:#22d3ee; --green:#22c55e; --amber:#f59e0b; --violet:#a78bfa;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; }
+  body {
+    background:var(--bg); color:var(--ink); font-family:var(--sans); line-height:1.55;
+    min-height:100vh; -webkit-font-smoothing:antialiased; font-feature-settings:"tnum" 1;
+  }
+  ::selection { background:rgba(34,211,238,0.28); }
+  .wrap { max-width:1120px; margin:0 auto; padding:0 24px; }
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+    background-size:44px 44px;
+  }
+  .eyebrow { font-family:var(--mono); font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:var(--ink-3); }
+  a { color:inherit; text-decoration:none; }
+  a:focus-visible, button:focus-visible { outline:2px solid var(--cyan); outline-offset:2px; border-radius:4px; }
+
+  .topbar {
+    position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:14px;
+    padding:12px 24px; border-bottom:1px solid var(--line);
+    background:rgba(10,14,20,0.82); backdrop-filter:blur(8px);
+  }
+  .brand { display:flex; align-items:center; gap:10px; }
+  .brand .glyph {
+    width:30px; height:30px; border-radius:6px; display:grid; place-items:center;
+    background:rgba(34,211,238,0.14); color:var(--cyan);
+    font-family:var(--mono); font-weight:700; font-size:13px; border:1px solid rgba(34,211,238,0.25);
+  }
+  .brand b { font-size:13.5px; }
+  .brand span { display:block; font-family:var(--mono); font-size:10px; letter-spacing:0.22em; color:var(--ink-3); }
+  .topbar .spacer { flex:1; }
+  .toplink { font-family:var(--mono); font-size:11.5px; letter-spacing:0.04em; color:var(--ink-2); padding:6px 10px; border:1px solid var(--line-2); border-radius:6px; transition:color .15s, border-color .15s; }
+  .toplink:hover { color:var(--ink); border-color:#3a4a60; }
+
+  .hero { border-bottom:1px solid var(--line); }
+  .hero-inner { padding:56px 24px 46px; }
+  .hero h1 { font-size:clamp(30px,5vw,50px); line-height:1.04; margin:14px 0 0; letter-spacing:-0.02em; font-weight:750; text-wrap:balance; max-width:16ch; }
+  .hero h1 .accent { color:var(--cyan); }
+  .hero p.lede { margin:18px 0 0; max-width:60ch; font-size:16.5px; color:var(--ink-2); }
+  .ticker { display:flex; flex-wrap:wrap; gap:10px; margin-top:26px; }
+  .stat { font-family:var(--mono); font-size:12px; padding:7px 11px; border:1px solid var(--line-2); border-radius:7px; background:var(--panel); color:var(--ink-2); }
+  .stat b { color:var(--ink); font-weight:600; }
+  .stat .dot { color:var(--green); }
+  .cta-row { display:flex; flex-wrap:wrap; gap:12px; margin-top:30px; align-items:center; }
+  .btn { display:inline-flex; align-items:center; gap:8px; font-size:14px; font-weight:600; padding:11px 20px; border-radius:8px; border:1px solid transparent; transition:background .15s, border-color .15s; }
+  .btn-primary { background:var(--cyan); color:#04212a; }
+  .btn-primary:hover { background:#4fe0f4; }
+  .btn-ghost { background:var(--raised); color:var(--ink); border-color:var(--line-2); }
+  .btn-ghost:hover { border-color:#3a4a60; }
+  .free { font-family:var(--mono); font-size:12px; color:var(--ink-2); display:inline-flex; align-items:center; gap:7px; }
+  .free .dot { width:7px; height:7px; border-radius:50%; background:var(--green); }
+
+  section { padding:46px 24px; }
+  .sec-head { margin-bottom:22px; }
+  .sec-head h2 { font-size:20px; font-weight:680; letter-spacing:-0.01em; margin:6px 0 0; }
+
+  .modules { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:14px; }
+  .card { display:flex; flex-direction:column; border:1px solid var(--line); border-radius:11px; background:var(--panel); padding:18px 18px 16px; transition:border-color .16s, background .16s, transform .06s; }
+  .card:hover { border-color:var(--line-2); background:var(--panel-2); }
+  .card:active { transform:translateY(1px); }
+  .card .top { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .cat { display:inline-flex; align-items:center; gap:7px; font-family:var(--mono); font-size:10.5px; letter-spacing:0.13em; text-transform:uppercase; color:var(--ink-3); }
+  .cat .d { width:7px; height:7px; border-radius:50%; }
+  .arrow { color:var(--ink-3); transition:color .16s, transform .16s; font-size:15px; }
+  .card:hover .arrow { color:var(--cyan); transform:translate(2px,-2px); }
+  .card h3 { margin:13px 0 0; font-size:16.5px; font-weight:640; letter-spacing:-0.01em; }
+  .card p { margin:7px 0 0; font-size:13.5px; color:var(--ink-2); line-height:1.5; }
+  .card .route { margin-top:14px; font-family:var(--mono); font-size:11.5px; color:var(--ink-3); border-top:1px solid var(--line); padding-top:11px; }
+  .card .route em { color:var(--cyan); font-style:normal; }
+
+  .note { border:1px solid var(--line); border-radius:11px; background:var(--panel); padding:20px; }
+  .note h3 { margin:0; font-size:15px; font-weight:640; }
+  .note ul { margin:12px 0 0; padding-left:0; list-style:none; display:flex; flex-direction:column; gap:10px; }
+  .note li { display:flex; gap:11px; font-size:13.5px; color:var(--ink-2); }
+  .note li .n { color:var(--cyan); flex:none; }
+  .note b { color:var(--ink); font-weight:600; }
+
+  footer { border-top:1px solid var(--line); padding:26px 24px 40px; }
+  .foot { display:flex; flex-wrap:wrap; align-items:center; gap:16px; }
+  .foot .spacer { flex:1; }
+  .foot a { font-family:var(--mono); font-size:12px; color:var(--ink-2); border-bottom:1px solid transparent; padding-bottom:1px; }
+  .foot a:hover { color:var(--ink); border-color:var(--line-2); }
+  .foot .meta { font-family:var(--mono); font-size:11px; color:var(--ink-3); }
+
+  @media (max-width:720px){ .hero-inner{ padding:40px 20px 34px; } }
+  @media (prefers-reduced-motion: reduce){ * { transition:none !important; } }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">
+      <div class="glyph">AI</div>
+      <div><b>Acquisition Intelligence</b><span>DK INVESTING</span></div>
+    </div>
+    <div class="spacer"></div>
+    <a class="toplink" href="/">Open app →</a>
+    <a class="toplink" href="https://github.com/dylankrpan-wq/DKsInvesting" target="_blank" rel="noreferrer">Repo</a>
+  </div>
+
+  <header class="hero grid-bg">
+    <div class="wrap hero-inner">
+      <div class="eyebrow">Institutional deal-sourcing platform</div>
+      <h1>Find the <span class="accent">right business</span> to buy — before everyone else.</h1>
+      <p class="lede">One place to source, score, value, finance, and monitor profitable businesses for sale. Every dashboard below runs on the same proprietary scoring, valuation, and financing engines.</p>
+
+      <div class="ticker">
+        <div class="stat"><span class="dot">●</span> <b>8</b> modules</div>
+        <div class="stat"><b>0–100</b> opportunity score</div>
+        <div class="stat">IRR · NPV · DSCR</div>
+        <div class="stat">Live GIS map</div>
+        <div class="stat">SBA financing model</div>
+        <div class="stat">AI due diligence</div>
+      </div>
+
+      <div class="cta-row">
+        <a class="btn btn-primary" href="/">Open Dashboard →</a>
+        <span class="free"><span class="dot"></span> Public link — no login or account required</span>
+      </div>
+    </div>
+  </header>
+
+  <section class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">The suite</div>
+      <h2>Dashboards &amp; tools</h2>
+    </div>
+    <div class="modules" id="modules"></div>
+  </section>
+
+  <section class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Sharing</div>
+      <h2>Send the link — that’s it</h2>
+    </div>
+    <div class="note">
+      <ul>
+        <li><span class="n">◆</span><span>This is a <b>public website</b>. Anyone with the link opens every dashboard — <b>no sign-in, no account, ever</b>.</span></li>
+        <li><span class="n">◆</span><span>Share this page as a friendly front door, or send people straight to the <a href="/" style="color:var(--cyan)">dashboard</a> — both work the same way.</span></li>
+        <li><span class="n">◆</span><span>Pipeline and watchlist state saves in <b>each person’s own browser</b> (no login yet), so viewers can explore without affecting each other. Shared accounts + a database are the next milestone.</span></li>
+        <li><span class="n">◆</span><span>All figures run on a built-in <b>sample dataset</b>; real listings flow in through the CSV / provider ingestion pipeline.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap foot">
+      <a href="/">Open dashboard →</a>
+      <a href="https://github.com/dylankrpan-wq/DKsInvesting" target="_blank" rel="noreferrer">GitHub repo</a>
+      <div class="spacer"></div>
+      <div class="meta">Next.js · TypeScript · Tailwind · Leaflet — DK Investing</div>
+    </div>
+  </footer>
+
+  <script>
+    var CATS = { OVERVIEW:"#5f7183", SOURCE:"#22d3ee", STRATEGY:"#3b82f6", EXECUTE:"#22c55e", MODEL:"#f59e0b", DILIGENCE:"#a78bfa" };
+    var MODULES = [
+      { cat:"OVERVIEW",  name:"Executive Dashboard", route:"/",
+        desc:"Live KPIs, a value-vs-quality map, top opportunities, plus most-undervalued and most-motivated-seller watchlists." },
+      { cat:"SOURCE",    name:"Deal Explorer", route:"/deals",
+        desc:"Natural-language search and advanced filters — state, industry, score, SBA, seller financing. Export the filtered set to CSV." },
+      { cat:"SOURCE",    name:"Deal Map", route:"/map",
+        desc:"Every business geolocated. Recolor markers by opportunity score, median income, population growth, or competition." },
+      { cat:"STRATEGY",  name:"Roll-Up Finder", route:"/rollup",
+        desc:"Clusters fragmented same-industry targets into a platform and models synergies and multiple-arbitrage value creation." },
+      { cat:"EXECUTE",   name:"Deal Pipeline", route:"/pipeline",
+        desc:"A Kanban CRM: 9-stage funnel, drag-and-drop, priority, probability, next actions, and weighted pipeline value." },
+      { cat:"MODEL",     name:"Portfolio Simulator", route:"/portfolio",
+        desc:"Model multiple acquisitions together — IRR, NPV, equity multiple, cash-on-cash, DSCR, and down/base/up scenarios." },
+      { cat:"MODEL",     name:"SBA Calculator", route:"/sba-calculator",
+        desc:"Financing structure, DSCR, cash-on-cash, equity payback, and the maximum price the cash flow can support." },
+      { cat:"DILIGENCE", name:"Due Diligence", route:"/deals/L-004/diligence",
+        desc:"Auto-generated red flags, document requests, seller questions, a checklist, and an investment memo — optionally rewritten by Claude." }
+    ];
+    var grid = document.getElementById("modules");
+    MODULES.forEach(function (m) {
+      var a = document.createElement("a");
+      a.className = "card";
+      a.setAttribute("href", m.route);
+      a.innerHTML =
+        '<div class="top"><span class="cat"><span class="d" style="background:' + CATS[m.cat] + '"></span>' + m.cat + '</span><span class="arrow">↗</span></div>' +
+        '<h3>' + m.name + '</h3>' +
+        '<p>' + m.desc + '</p>' +
+        '<div class="route">route <em>' + m.route + '</em></div>';
+      grid.appendChild(a);
+    });
+  </script>
+</body>
+</html>
