@@ -54,7 +54,7 @@ def fetch_and_alert() -> dict:
             date = ev.get("date") or ""
             marker = f"econ::{name}::{date}"
             if c.execute("SELECT 1 FROM alerts WHERE kind='ECON_PRINT' AND payload LIKE ? LIMIT 1",
-                         (f'%"m":"{marker}"%',)).fetchone():
+                         (f'%"m": "{marker}"%',)).fetchone():
                 continue
             est, prev = ev.get("estimate"), ev.get("previous")
             surprise = ""
