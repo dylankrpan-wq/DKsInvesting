@@ -91,12 +91,24 @@ def _run_once_impl() -> dict:
         print(f"[poller] portfolio news list: {_e}")
     summary["news_per_ticker"] = news_rss.fetch_per_ticker(_news_syms)
 
-    # NewsAPI per ticker (if key set)
-    napi_total = 0
-    for s in syms:
-        napi_total += news_newsapi.fetch_for_symbol(s, name_lookup.get(s))
-        time.sleep(0.5)
-    summary["news_newsapi"] = napi_total
+    # NewsAPI per ticker. The key may be newsapi.org (32-hex) OR newsapi.ai /
+    # Event Registry (UUID) — route by format. The .ai path is throttled
+    # (rotating cursor + hard daily budget) so the free tier isn't blown.
+    from dk.sources import news_eventregistry
+    from dk.config import get_key as _get_key
+    _napi_key = _get_key("NEWSAPI_KEY")
+    if news_eventregistry.is_eventregistry_key(_napi_key):
+        try:
+            summary["news_eventregistry"] = news_eventregistry.fetch_rotating()
+        except Exception as e:
+            print(f"[newsapi.ai] {e}")
+            summary["news_eventregistry"] = {"error": str(e)}
+    elif _napi_key:
+        napi_total = 0
+        for s in syms:
+            napi_total += news_newsapi.fetch_for_symbol(s, name_lookup.get(s))
+            time.sleep(0.5)
+        summary["news_newsapi"] = napi_total
 
     # Crypto
     summary["crypto_rows"] = crypto_coingecko.fetch_prices(crypto_ids())

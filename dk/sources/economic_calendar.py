@@ -1,8 +1,13 @@
 """US economic data prints — actual vs estimate vs previous.
 
-Uses Financial Modeling Prep's economic calendar (free tier). When a high-impact
-US release posts its ACTUAL, emits an ECON_PRINT alert with the surprise vs
-consensus (e.g. "CPI 3.1% vs 3.2% est — cooler than expected"). No-op w/o key.
+Uses Financial Modeling Prep's economic calendar. When a high-impact US release
+posts its ACTUAL, emits an ECON_PRINT alert with the surprise vs consensus
+(e.g. "CPI 3.1% vs 3.2% est — cooler than expected"). No-op without a key.
+
+NOTE (2026): FMP moved the economic calendar behind a PAID plan — the free tier
+returns 402 "Restricted" / 403 "Legacy". On those we flip _UNAVAILABLE and
+no-op cleanly (so we don't hammer a dead endpoint every poll). A paid FMP plan
+re-enables it; a free FRED-based path is the planned free alternative.
 """
 from __future__ import annotations
 import json
@@ -10,6 +15,7 @@ import sqlite3
 from dk.config import DB_PATH, get_key
 
 _US = {"US", "USA", "United States"}
+_UNAVAILABLE = False  # set once we learn this plan can't serve the endpoint
 
 
 def _fmt(v):
@@ -23,15 +29,24 @@ def _fmt(v):
 
 
 def fetch_and_alert() -> dict:
+    global _UNAVAILABLE
     key = get_key("FMP_API_KEY")
     if not key:
         return {"configured": False, "alerts": 0}
+    if _UNAVAILABLE:
+        return {"configured": True, "available": False, "alerts": 0}
     import requests
     try:
         r = requests.get(
             "https://financialmodelingprep.com/api/v3/economic_calendar",
             params={"apikey": key}, timeout=15,
         )
+        if r.status_code in (401, 402, 403):
+            _UNAVAILABLE = True
+            print(f"[econ] FMP economic calendar unavailable on this plan "
+                  f"(HTTP {r.status_code}) — econ prints need a paid FMP plan or a "
+                  "free FRED key. Disabling for this process.")
+            return {"configured": True, "available": False, "http": r.status_code}
         if r.status_code != 200:
             return {"configured": True, "alerts": 0, "http": r.status_code}
         data = r.json()

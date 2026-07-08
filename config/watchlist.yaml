@@ -300,3 +300,13 @@ sms:
     - EARNINGS_NEAR
     - RANK_JUMP
     - NEW_TOP
+
+# NewsAPI per-ticker news enrichment. The key in secrets.env is auto-detected:
+#   - newsapi.ai / Event Registry (UUID key) -> throttled rotating fetch below
+#   - newsapi.org (32-hex key)               -> per-ticker each cycle
+# The .ai path rotates through watchlist+portfolio a few names per poll and
+# stops at a hard daily call budget so a free plan isn't exhausted.
+newsapi:
+  enabled: true
+  batch_size: 4        # names fetched per poll (each name = 1 API call)
+  daily_budget: 80     # hard cap on newsapi.ai calls/day (resets at UTC midnight)
