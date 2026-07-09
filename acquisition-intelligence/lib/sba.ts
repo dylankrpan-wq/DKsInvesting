@@ -1,4 +1,5 @@
 import type { Listing, SbaInputs, SbaResult } from "./types";
+import { replacementSalary } from "./benchmarks";
 
 /** Standard amortizing loan payment. */
 function monthlyPayment(principal: number, annualRatePct: number, years: number): number {
@@ -19,7 +20,7 @@ export function defaultSbaInputs(listing: Listing): SbaInputs {
     interestRatePct: 11.0, // Prime + ~3.5% (v1 assumption)
     termYears: 10, // goodwill-heavy acquisitions amortize over 10 yrs
     sde: listing.sde,
-    newOwnerSalary: 85_000,
+    newOwnerSalary: replacementSalary(listing.ownerHoursPerWeek),
   };
 }
 

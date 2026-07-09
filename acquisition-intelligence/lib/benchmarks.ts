@@ -33,8 +33,24 @@ export const BENCHMARKS: Record<Industry, Benchmark> = {
   Fitness: { medianSdeMultiple: 2.5, ebitdaMultiple: 3.5, targetMarginPct: 16, marketGrowth: 56 },
   "Cleaning Services": { medianSdeMultiple: 2.8, ebitdaMultiple: 3.8, targetMarginPct: 18, marketGrowth: 68 },
   "Pest Control": { medianSdeMultiple: 3.7, ebitdaMultiple: 5.0, targetMarginPct: 22, marketGrowth: 76 },
+  // Coin laundries / washaterias: recession-resistant recurring cash, high SDE
+  // margins, semi-absentee. Trade richer than most Main Street retail.
+  Laundromat: { medianSdeMultiple: 4.0, ebitdaMultiple: 5.0, targetMarginPct: 32, marketGrowth: 60 },
 };
 
 export function benchmarkFor(industry: Industry): Benchmark {
   return BENCHMARKS[industry];
+}
+
+/**
+ * Cost to replace the seller's own labor with hired management, scaled to the
+ * hours they actually work. A fixed full-time salary badly over-penalizes
+ * semi-absentee / absentee businesses (e.g. a laundromat run ~15 hrs/wk), so we
+ * price it off owner hours at a manager's rate, floored and capped sensibly.
+ * Used by both the DCF fair value and the SBA cash-flow model.
+ */
+export function replacementSalary(ownerHoursPerWeek: number): number {
+  const managerHourly = 32;
+  const raw = ownerHoursPerWeek * 52 * managerHourly;
+  return Math.round(Math.max(8_000, Math.min(95_000, raw)));
 }

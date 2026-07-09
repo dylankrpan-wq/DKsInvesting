@@ -20,7 +20,8 @@ export type Industry =
   | "Retail"
   | "Fitness"
   | "Cleaning Services"
-  | "Pest Control";
+  | "Pest Control"
+  | "Laundromat";
 
 export type ListingStatus = "active" | "under_loi" | "pending" | "sold" | "reduced";
 

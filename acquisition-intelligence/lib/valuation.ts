@@ -1,5 +1,5 @@
 import type { Listing, Valuation, ValuationEstimate } from "./types";
-import { benchmarkFor } from "./benchmarks";
+import { benchmarkFor, replacementSalary } from "./benchmarks";
 
 /**
  * Discounted Cash Flow for an owner-operated small business.
@@ -7,8 +7,7 @@ import { benchmarkFor } from "./benchmarks";
  * grow it, and discount at a small-business rate reflecting illiquidity + risk.
  */
 function dcf(listing: Listing): number {
-  const replacementSalary = 85_000;
-  const fcf0 = Math.max(0, listing.sde - replacementSalary);
+  const fcf0 = Math.max(0, listing.sde - replacementSalary(listing.ownerHoursPerWeek));
   const growth = clampGrowth(listing.revenueGrowth3yrPct) / 100;
   const discount = 0.24; // 24% — typical for a Main Street acquisition
   const terminalGrowth = 0.02;
